@@ -6,6 +6,7 @@ It allows having the BAL within the Kernel while the NFCRdLib runs in user space
 
 ## Build the Module
 If you look into a out-of-the-box working version for raspberry pi, refer to https://github.com/christianeisendle/linux
+
 The module can be built out of the kernel tree ('extra' module). It requires the kernel sources checked out. The following example assumes that the kernel sources `/usr/src/linux-source` and this repo cloned to `/usr/src/nxprdlib-kernel-bal`.
 
 ```
