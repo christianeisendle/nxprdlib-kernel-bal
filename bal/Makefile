@@ -3,3 +3,4 @@
 #
 
 obj-m					+= bal.o
+ccflags-y := -I$(src)/include

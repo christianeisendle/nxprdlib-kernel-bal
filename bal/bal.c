@@ -26,8 +26,9 @@
 #include <linux/of_gpio.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/spidev.h>
-
+#include <linux/spi/bal_spi.h>
 #include <linux/uaccess.h>
+
 #define BALDEV_NAME "bal"
 #define BALDEV_MAJOR			100
 #define BALDEV_MINOR			0
@@ -196,13 +197,18 @@ static int bal_spi_probe(struct spi_device *spi)
 	mutex_init(&bal.use_lock);
 	if (spi->dev.of_node) {
 		bal.busy_pin = of_get_named_gpio(spi->dev.of_node, "busy-pin-gpio", 0);
-		if (!gpio_is_valid(bal.busy_pin)) {
-			dev_err(&spi->dev, "BUSY pin mapped to an invalid GPIO!\n");
-			return -ENODEV;
-		}
 	}
 	else {
-		dev_err(&spi->dev, "BUSY pin not specified via device tree!\n");
+		struct bal_spi_platform_data * platform_data = spi->dev.platform_data;
+
+		if (!platform_data) {
+			dev_err(&spi->dev, "Platform data for BAL not specified!\n");
+			return -ENODEV;
+		}
+		bal.busy_pin = platform_data->busy_pin;
+	}
+	if (!gpio_is_valid(bal.busy_pin)) {
+		dev_err(&spi->dev, "BUSY pin mapped to an invalid GPIO!\n");
 		return -ENODEV;
 	}
 	bal.spi = spi;
