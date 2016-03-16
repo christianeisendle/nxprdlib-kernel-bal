@@ -5,8 +5,10 @@ This is a linux kernel module for the NXP NFCRdLib BAL (Bus Abstraction Layer).
 It allows having the BAL within the Kernel while the NFCRdLib runs in user space. This may be required in order to redurce the latency introduced by unnecessary context switches when BAL also runs in user space.
 
 ## Build the Module
-If you look into a out-of-the-box working version for raspberry pi, refer to https://github.com/christianeisendle/linux
+### Raspberry Pi
+If you look into an out-of-the-box working version for raspberry pi, refer to https://github.com/christianeisendle/linux
 
+### Generic
 The module can be built out of the kernel tree ('extra' module). It requires the kernel sources checked out. The following example assumes that the kernel sources `/usr/src/linux-source` and this repo cloned to `/usr/src/nxprdlib-kernel-bal`.
 
 ```
@@ -18,8 +20,10 @@ make M=/usr/src/nxprdlib-kernel-bal
 The compiled module is available in `/usr/src/nxprdlib-kernel-bal/bal.ko`. If it should be installed within the current system/kernel then `sudo make M=/usr/src/nxprdlib-kernel-bal modules_install` can be called. Alternatively, the module can be manually copied to `/lib/modules/YOUR_KERNEL_VERSION/extra` and `depmod -a` needs to be issued.
 
 **Note:** In order to compile the module the correct `Module.symvers` file (corresponding to the kernel in use) must be present in `/usr/src/linux-source`. There are two ways to get to this file:
-1. Build the kernel from scratch. This also generates the `Module.symvers`
-2. Get the `Module.symvers` for the kernel in use. On Debian/Ubuntu `Module.symvers` is part of the `linux-headers` package. (See also http://askubuntu.com/questions/168279/how-do-i-build-a-single-in-tree-kernel-module). On Raspberry Pi the Module.symvers is available in this repository: https://github.com/raspberrypi/firmware/tree/master/extra (See also: https://www.raspberrypi.org/documentation/linux/kernel/building.md)
+  1. Build the kernel from scratch. This also generates the `Module.symvers`
+  2. Get the `Module.symvers` for the kernel in use. On Debian/Ubuntu `Module.symvers` is part of the `linux-headers` package.
+
+(See also http://askubuntu.com/questions/168279/how-do-i-build-a-single-in-tree-kernel-module). On Raspberry Pi the Module.symvers is available in this repository: https://github.com/raspberrypi/firmware/tree/master/extra (See also: https://www.raspberrypi.org/documentation/linux/kernel/building.md)
 Like for `Module.symvers` a proper `.config` file must be available in `/usr/src/linux-source`. Also this is automatically generates when building the kernel from scratch. If supported, the running kernel configuration is also present in `/boot/config*` and just needs to be copied to `/usr/src/linux-source/.config`. 
 
 A complete build example for Debian (assuming that `linux-source` and `linux-headers` package is already installed)
