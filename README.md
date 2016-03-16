@@ -91,7 +91,7 @@ static struct spi_board_info bcm2708_spi_devices[] = {
 After applying these changes the Kernel needs to be recompiled.
 
 ## Load the Module
-The module requires an SPI device to be associated with it. The SPI device needs to be connected with the module using device tree (compatible tag has to be set to "nxp,bal") or using SPI board info (not supported yet).
+The module requires an SPI device to be associated with it. The SPI device needs to be connected with the module using device tree (`compatible` string has to be set to `"nxp,bal"`) or using SPI board info (see above).
 An example device tree overlay can be found here: https://github.com/christianeisendle/linux/blob/rpi_4.1.19_bal/arch/arm/boot/dts/overlays/bal-overlay.dts
 
 On Raspberry Pi's device tree it can be added like this:
