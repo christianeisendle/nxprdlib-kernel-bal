@@ -52,9 +52,46 @@ make modules_prepare
 make M=/usr/src/nxprdlib-kernel-bal
 make M=/usr/src/nxprdlib-kernel-bal modules_install
 ```
+### SPI Board Info
+In case device tree is not used the BAL module needs to be assigned to a spi_device within the spi_board_info struct of the platform specific code. In case of Raspberry Pi 2 the code is located within the kernel tree at `arch/arm/mach-bcm2709/bcm2709.c`
+
+The existing bcm2708_spi_devices array needs to be adapted/modified in order to assign one SPI device with the BAL module instead of the spidev module. Example:
+
+```
+#include <linux/spi/bal_spi.h>
+
+static struct bal_spi_platform_data balPlatformData = {
+  .busy_pin = 25,
+};
+
+#ifdef CONFIG_BCM2708_SPIDEV
+static struct spi_board_info bcm2708_spi_devices[] = {
+	{
+		.modalias = "bal",
+		.max_speed_hz = 5000000,
+		.bus_num = 0,
+		.chip_select = 0,
+		.mode = SPI_MODE_0,
+		.platform_data = &balPlatformData,
+	}
+#ifdef CONFIG_SPI_SPIDEV
+	, {
+		.modalias = "spidev",
+		.max_speed_hz = 500000,
+		.bus_num = 0,
+		.chip_select = 1,
+		.mode = SPI_MODE_0,
+	}
+#endif
+};
+#endif
+```
+
+`bal_spi.h` is present in this repo in `bal/include/linux/spi/bal_spi.h` and needs to be copied to the linux source tree under `include/linux/spi/`.
+After applying these changes the Kernel needs to be recompiled.
 
 ## Load the Module
-The module requires an SPI device to be associated with it. The SPI device needs to be connected with the module using device tree (compatible tag has to be set to "nxp,bal") or using SPI board info (not supported yet).
+The module requires an SPI device to be associated with it. The SPI device needs to be connected with the module using device tree (`compatible` string has to be set to `"nxp,bal"`) or using SPI board info (see above).
 An example device tree overlay can be found here: https://github.com/christianeisendle/linux/blob/rpi_4.1.19_bal/arch/arm/boot/dts/overlays/bal-overlay.dts
 
 On Raspberry Pi's device tree it can be added like this:
