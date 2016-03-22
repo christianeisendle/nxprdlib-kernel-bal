@@ -47,9 +47,7 @@ struct bal_data {
 	struct mutex		use_lock;
 	bool			in_use;
 	unsigned int		busy_pin;
-	u8			tx_buffer[BAL_MAX_BUF_SIZE];
-	u8			rx_buffer[BAL_MAX_BUF_SIZE];
-	u32			speed_hz;
+	u8	*		buffer;
 };
 
 
@@ -80,10 +78,10 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 	
 	status = wait_for_busy_idle();
 	if (0 == status) {
-		status = spi_read(bal.spi, bal.rx_buffer, count);
+		status = spi_read(bal.spi, bal.buffer, count);
 	}
 
-	if (copy_to_user(buf, bal.rx_buffer, count)) {
+	if (copy_to_user(buf, bal.buffer, count)) {
 		return -EFAULT;
 	}
 	return count;
@@ -98,7 +96,7 @@ baldev_write(struct file *filp, const char __user *buf,
 	if (count > BAL_MAX_BUF_SIZE) {
 		return -ENOMEM;
 	}
-	status = copy_from_user(bal.tx_buffer, buf, count);
+	status = copy_from_user(bal.buffer, buf, count);
 	if (status) {
 		return status;
 	}
@@ -108,7 +106,7 @@ baldev_write(struct file *filp, const char __user *buf,
 	if (0 == status) {
 
 		if (status == 0) {
-			status = spi_write(bal.spi, bal.tx_buffer, count);
+			status = spi_write(bal.spi, bal.buffer, count);
 		}
 	}
 
@@ -127,6 +125,12 @@ static int baldev_open(struct inode *inode, struct file *filp)
 		mutex_unlock(&bal.use_lock);
 		return -EBUSY;
 	}
+	bal.buffer = kmalloc(BAL_MAX_BUF_SIZE, GFP_KERNEL | GFP_DMA);
+	if (bal.buffer == NULL) {
+		dev_err(&bal.spi->dev, "Unable to alloc memory!\n");
+		mutex_unlock(&bal.use_lock);
+		return -ENOMEM;
+	}
 	bal.in_use = true;
 	mutex_unlock(&bal.use_lock);
 
@@ -140,6 +144,7 @@ static int baldev_release(struct inode *inode, struct file *filp)
 {
 	int status = 0;
 	module_put(THIS_MODULE);
+	kfree(bal.buffer);
 	bal.in_use = false;
 	return status;
 }
