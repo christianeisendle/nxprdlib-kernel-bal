@@ -100,7 +100,7 @@ On Raspberry Pi's device tree it can be added like this:
 cd /boot
 sudo wget https://raw.githubusercontent.com/christianeisendle/linux/rpi_4.1.19_bal/arch/arm/boot/dts/overlays/bal-overlay.dts
 # Note: dtc is part of the device-tree-compiler package: sudo apt-get install device-tree-compiler
-sudo dtc -I dts -O dtb -o bal-overlay.dtb bal-overlay.dts
+sudo dtc -I dts -O dtb -o bal-overlay.dtb -@ bal-overlay.dts
 sudo mv bal-overlay.dtb overlays/
 sudo echo "dtoverlay=bal" >> config.txt
 ```
