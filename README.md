@@ -111,4 +111,10 @@ To load the module during boot, it should be added to `/etc/modules`:
 echo "bal" >> /etc/modules
 ```
 
-If loaded successfully, `/dev/bal` is being populated by udevd. 
+### Change ownership of `/dev/bal`
+The device node `/dev/bal` is populated with ownership `root.root` and access rights set to `0660`. In order to change ownership or access rights persistently a rule to udevd needs to be added in order to perform appropriate actions when `/dev/bal` is populated or removed again. Following example for Raspberry Pi changes group of `/dev/bal` to `spi` where user `pi` is a member of.
+
+```
+echo "SUBSYSTEM==\"bal\", GROUP=\"spi\", MODE=\"0660\"" > /tmp/99-bal.rules
+sudo mv /tmp/99-bal.rules /etc/udev/rules.d/
+```
