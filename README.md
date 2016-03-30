@@ -14,7 +14,7 @@ The module can be built out of the kernel tree ('extra' module). It requires the
 ```
 cd /usr/src/linux-source
 make modules_prepare
-make M=/usr/src/nxprdlib-kernel-bal
+make M=/usr/src/nxprdlib-kernel-bal/bal 
 ```
 
 The compiled module is available in `/usr/src/nxprdlib-kernel-bal/bal.ko`. If it should be installed within the current system/kernel then `sudo make M=/usr/src/nxprdlib-kernel-bal modules_install` can be called. Alternatively, the module can be manually copied to `/lib/modules/YOUR_KERNEL_VERSION/extra` and `depmod -a` needs to be issued.
@@ -33,8 +33,8 @@ cd /usr/src/linux-source*/
 cp /boot/config-* .config
 cp /usr/src/linux-headers-`uname -r`/Module.symvers .
 make modules_prepare
-make M=/usr/src/nxprdlib-kernel-bal
-make M=/usr/src/nxprdlib-kernel-bal modules_install
+make M=/usr/src/nxprdlib-kernel-bal/bal
+make M=/usr/src/nxprdlib-kernel-bal/bal modules_install
 ```
 
 Raspberry Pi 2 Example:
@@ -49,8 +49,8 @@ make bcm2709_defconfig
 wget https://raw.githubusercontent.com/raspberrypi/firmware/master/extra/Module7.symvers
 mv Module7.symvers Module.symvers
 make modules_prepare
-make M=/usr/src/nxprdlib-kernel-bal
-make M=/usr/src/nxprdlib-kernel-bal modules_install
+make M=/usr/src/nxprdlib-kernel-bal/bal
+make M=/usr/src/nxprdlib-kernel-bal/bal modules_install
 ```
 ### SPI Board Info
 In case device tree is not used the BAL module needs to be assigned to a spi_device within the spi_board_info struct of the platform specific code. In case of Raspberry Pi 2 the code is located within the kernel tree at `arch/arm/mach-bcm2709/bcm2709.c`
