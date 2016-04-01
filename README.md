@@ -103,6 +103,9 @@ sudo wget https://raw.githubusercontent.com/christianeisendle/linux/rpi_4.1.19_b
 sudo dtc -I dts -O dtb -o bal-overlay.dtb -@ bal-overlay.dts
 sudo mv bal-overlay.dtb overlays/
 sudo echo "dtoverlay=bal" >> config.txt
+# optional step: In case BUSY pin should be mapped to a different GPIO than 25, which is default:
+sudo echo "dtparam=busy-pin-gpio=23" >> config.txt
+# In this case BUSY is now routed to GPIO 23
 ```
 
 To load the module during boot, it should be added to `/etc/modules`:
