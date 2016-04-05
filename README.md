@@ -2,13 +2,13 @@
 
 ## General
 This is a linux kernel module for the NXP NFCRdLib BAL (Bus Abstraction Layer). 
-It allows having the BAL within the Kernel while the NFCRdLib runs in user space. This may be required in order to redurce the latency introduced by unnecessary context switches when BAL also runs in user space.
+It allows having the BAL within the Kernel while the NFCRdLib runs in user space. This may be required in order to reduce the latency introduced by unnecessary context switches when BAL also runs in user space.
 
 ## Build the Module
 ### Raspberry Pi
 If you look into an out-of-the-box working version for raspberry pi, refer to https://github.com/christianeisendle/linux
 
-### Generic
+### Other Platforms
 The module can be built out of the kernel tree ('extra' module). It requires the kernel sources checked out. The following example assumes that the kernel sources `/usr/src/linux-source` and this repo cloned to `/usr/src/nxprdlib-kernel-bal`.
 
 ```
