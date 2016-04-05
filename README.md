@@ -17,7 +17,7 @@ make modules_prepare
 make M=/usr/src/nxprdlib-kernel-bal/bal 
 ```
 
-The compiled module is available in `/usr/src/nxprdlib-kernel-bal/bal.ko`. If it should be installed within the current system/kernel then `sudo make M=/usr/src/nxprdlib-kernel-bal modules_install` can be called. Alternatively, the module can be manually copied to `/lib/modules/YOUR_KERNEL_VERSION/extra` and `depmod -a` needs to be issued.
+The compiled module is available in `/usr/src/nxprdlib-kernel-bal/bal/bal.ko`. If it should be installed within the current system/kernel then `sudo make M=/usr/src/nxprdlib-kernel-bal/bal/nxprdlib-kernel-bal modules_install` can be called. Alternatively, the module can be manually copied to `/lib/modules/YOUR_KERNEL_VERSION/extra` and `depmod -a` needs to be issued.
 
 **Note:** In order to compile the module the correct `Module.symvers` file (corresponding to the kernel in use) must be present in `/usr/src/linux-source`. There are two ways to get to this file:
   1. Build the kernel from scratch. This also generates the `Module.symvers`
