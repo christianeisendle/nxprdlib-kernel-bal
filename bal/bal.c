@@ -29,6 +29,8 @@
 #include <linux/spi/bal_spi.h>
 #include <linux/uaccess.h>
 
+//#include <phbalReg.h>
+
 #define BALDEV_NAME "bal"
 #define BALDEV_MAJOR			100
 #define BALDEV_MINOR			0
@@ -36,7 +38,8 @@
 #define BAL_MAX_BUF_SIZE		1024
 #define BAL_BUSY_TIMEOUT_SECS		1
 #define BAL_IOC_BUSY_PIN                0
-
+#define BAL_IOC_HAL_HW_TYPE		3
+#define BAL_IOC_RW_MULTI_REG		4
 
 struct bal_data {
 	dev_t			devt;
@@ -48,6 +51,9 @@ struct bal_data {
 	bool			in_use;
 	unsigned int		busy_pin;
 	u8	*		buffer;
+	u8	*		rxBuffer;
+	unsigned long		HalType;
+	unsigned long		MultiRegRW;
 };
 
 
@@ -72,17 +78,82 @@ static ssize_t
 baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 {
 	ssize_t			status = 0;
-	
+
+	int i;
+	ssize_t result;
+	struct spi_transfer xfers;
+		
 	if (count > BAL_MAX_BUF_SIZE)
 		return -EMSGSIZE;
+	status = copy_from_user(bal.buffer, buf, count);
 	
-	status = wait_for_busy_idle();
-	if (0 == status) {
-		status = spi_read(bal.spi, bal.buffer, count);
-	}
+  //	struct spi_transfer {
+  xfers.tx_buf = bal.buffer;
+  xfers.rx_buf = bal.rxBuffer;
+  xfers.len = count;
+  //xfers.dma_addr_t tx_dma;
+  xfers.rx_dma = bal.rxBuffer;
+  //struct sg_table tx_sg;
+  //struct sg_table rx_sg;
 
-	if (copy_to_user(buf, bal.buffer, count)) {
+  xfers.tx_nbits = SPI_NBITS_SINGLE;
+  xfers.rx_nbits = SPI_NBITS_SINGLE;
+
+  xfers.bits_per_word = 8;
+  xfers.delay_usecs = 0;
+  //u32 speed_hz;
+  //struct list_head transfer_list;
+//}; 
+
+  uint16_t flags = bal.spi->master->flags;
+  printk(KERN_ERR "master flags = %04X\n", bal.spi->master->flags);
+  printk(KERN_ERR "mode flags = %04X\n", bal.spi->mode);
+
+	if(bal.HalType == 0x02)
+	{
+		status = wait_for_busy_idle();
+
+		if (0 == status) {
+			//printk(KERN_ERR "before READ filp=%d   buf=%02X,%02X,%02X,%02X  count=%d\n", filp, buf[0], buf[1], buf[2], buf[3], count);
+			status = spi_read(bal.spi, bal.buffer, count);
+			printk(KERN_ERR "READ");
+		}
+	}
+	else
+	{
+		for(i = 0; i < count; i++) {
+			printk(KERN_ERR "before READ buffer[%d] = %d", i, bal.buffer[i]);
+			printk(KERN_ERR "before READ rxBuffer[%d] = %d", i, bal.rxBuffer[i]);
+		}
+		
+		//for(i = 0; i < count; i++)
+		//{
+			//status = spi_write_then_read(bal.spi, bal.buffer, count,  bal.buffer, count);
+		//	result = spi_w8r8(bal.spi, bal.buffer[i]);						
+		//	bal.buffer[i] = (uint8_t)result;
+		//}
+		//bal.buffer[0] = 0x00; // reader expets the first byte in the reply buffer 00h
+
+		//status = spi_sync_transfer (bal.spi, &xfers, 1);
+
+		if(status != 0){
+			printk(KERN_ERR "status = %d = %04X\n", status, status);
+			return status;
+		}
+
+		for(i = 0; i < count; i++) {
+			printk(KERN_ERR "after READ buffer[%d] = %d", i, bal.buffer[i]);
+			printk(KERN_ERR "after READ rxBuffer[%d] = %d", i, bal.rxBuffer[i]);
+		}
+	
+		result = 0;
+	//if (copy_to_user(buf, &result, 1))
+	//	return -EFAULT;
+	//if (copy_to_user(buf+1, bal.buffer, count-1))
+	//	return -EFAULT;
+	if (copy_to_user(buf, bal.rxBuffer, count))
 		return -EFAULT;
+	
 	}
 	return count;
 }
@@ -101,14 +172,17 @@ baldev_write(struct file *filp, const char __user *buf,
 		return status;
 	}
 
-	status = wait_for_busy_idle();
+	printk(KERN_ERR "WR filp=%d   buf=%02X,%02X  count=%d\n", filp, buf[0], buf[1], count);
 
-	if (0 == status) {
-
-		if (status == 0) {
-			status = spi_write(bal.spi, bal.buffer, count);
-		}
+	if(bal.HalType == 2)
+	{
+		status = wait_for_busy_idle();
+		if (status == 0)
+				status = spi_write(bal.spi, bal.buffer, count);
 	}
+	else
+		status = spi_write(bal.spi, bal.buffer, count);
+		//status = spi_write_then_read(bal.spi, bal.buffer, count,  bal.buffer, count);
 
 	if (status < 0)
 		return status;
@@ -125,12 +199,19 @@ static int baldev_open(struct inode *inode, struct file *filp)
 		mutex_unlock(&bal.use_lock);
 		return -EBUSY;
 	}
-	bal.buffer = kmalloc(BAL_MAX_BUF_SIZE, GFP_KERNEL | GFP_DMA);
+	bal.buffer = (uint8_t *)kmalloc(BAL_MAX_BUF_SIZE, GFP_KERNEL | GFP_DMA);
 	if (bal.buffer == NULL) {
 		dev_err(&bal.spi->dev, "Unable to alloc memory!\n");
 		mutex_unlock(&bal.use_lock);
 		return -ENOMEM;
 	}
+	bal.rxBuffer = (uint8_t *)kmalloc(BAL_MAX_BUF_SIZE, GFP_KERNEL | GFP_DMA);
+	if (bal.rxBuffer == NULL) {
+		dev_err(&bal.spi->dev, "Unable to alloc memory!\n");
+		mutex_unlock(&bal.use_lock);
+		return -ENOMEM;
+	}
+
 	bal.in_use = true;
 	mutex_unlock(&bal.use_lock);
 
@@ -152,18 +233,85 @@ static int baldev_release(struct inode *inode, struct file *filp)
 static long
 baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-	int status = -EINVAL;
-	if (cmd == BAL_IOC_BUSY_PIN) {
-		if (gpio_is_valid(arg)) {
-			status = gpio_request(arg, "BUSY pin");
-			if (!status) {
-				dev_info(&bal.spi->dev, "Setting BUSY pin to %d\n", (unsigned int)arg);
-				gpio_free(bal.busy_pin);
-				bal.busy_pin = (unsigned int)arg;
-				gpio_direction_input(bal.busy_pin);
-			}
-		}
+	//printk(KERN_ERR "%s : %d fp=%ld cmd=%ld arg=%lx\n", __FUNCTION__, __LINE__, (unsigned long int)filp, cmd, arg);
+	printk(KERN_ERR "my ioctl\n");
 
+	int status = 0; //-EINVAL;
+
+	//if (cmd == BAL_IOC_BUSY_PIN) {
+	//	if (gpio_is_valid(arg)) {
+	//		status = gpio_request(arg, "BUSY pin");
+	//		if (!status) {
+	//			dev_info(&bal.spi->dev, "Setting BUSY pin to %d\n", (unsigned int)arg);
+	//			gpio_free(bal.busy_pin);
+	//				bal.busy_pin = (unsigned int)arg;
+	//			gpio_direction_input(bal.busy_pin);
+	//		}
+	//	}
+	//
+	//}
+	
+	dev_info(&bal.spi->dev, "%s : %d fp=%ld cmd=%ld arg=%lx\n", __FUNCTION__, __LINE__, (unsigned long int)filp, cmd, arg);
+	
+	switch (cmd) {
+		case BAL_IOC_BUSY_PIN:
+			printk(KERN_ERR "busy pin\n");
+			if (gpio_is_valid(arg)) {
+				dev_info(&bal.spi->dev, "Requesting BUSY pin\n");
+				printk(KERN_ERR "Requesting BUSY pin\n");
+				status = gpio_request(arg, "BUSY pin");
+				if (!status) {
+					dev_info(&bal.spi->dev, "Setting BUSY pin to %d\n", (unsigned int)arg);
+					gpio_free(bal.busy_pin);
+					bal.busy_pin = (unsigned int)arg;
+					gpio_direction_input(bal.busy_pin);
+				}
+			}
+			//dev_info(&bal.spi->dev, "BAL_IOC_BUSY_PIN\n");
+			printk(KERN_ERR "busy pin\n");
+			break;
+		case 1:
+		case 2:
+			printk(KERN_ERR "uneffective option\n");
+			break;
+		case BAL_IOC_HAL_HW_TYPE:
+			bal.HalType = arg;
+			status = 0;
+			dev_info(&bal.spi->dev, "BAL_IOC_HAL_HW_TYPE - %d - %d\n", cmd, (unsigned int)arg);
+			printk(KERN_INFO "HAL_HW_type %s - %d %u\n", __FUNCTION__, __LINE__, arg);
+			break;
+		case BAL_IOC_RW_MULTI_REG:
+			bal.MultiRegRW = arg;
+			status = 0;
+			dev_info(&bal.spi->dev, "BAL_IOC_RW_MULTI_REG - %d - %d\n", cmd, (unsigned int)arg);
+			printk(KERN_INFO "multiREG %s - %d  %u\n", __FUNCTION__, __LINE__, arg);
+			break;
+		default:
+			printk(KERN_ERR "NO option - default\n");
+			break;
+//		case PHBAL_REG_CONFIG_HAL_HW_TYPE:
+//			switch (arg) {
+//				case PHBAL_REG_HAL_HW_RC523:
+//					bal.wHalType = arg;
+//					break;
+//				case PHBAL_REG_HAL_HW_RC663:
+//					bal.wHalType = arg;
+//					break;
+//				case PHBAL_REG_HAL_HW_PN5180:
+//					bal.wHalType = arg;
+//					break;
+//				default:
+//					return PH_ADD_COMPCODE(PH_ERR_INVALID_PARAMETER, PH_COMP_BAL);
+//			}
+//			break;
+//
+//		case PHBAL_CONFIG_RW_MULTI_REG:
+//			bal.bMultiRegRW = arg;
+//			break;
+//
+//		default:
+//			return PH_ADD_COMPCODE(PH_ERR_UNSUPPORTED_PARAMETER, PH_COMP_BAL);
+//			break;
 	}
 
 	return status;
@@ -198,7 +346,8 @@ static int bal_spi_remove(struct spi_device *spi)
 
 static int bal_spi_probe(struct spi_device *spi)
 {
-	dev_info(&spi->dev, "Probing BAL driver\n");
+	dev_info(&spi->dev, "Probing BAL kernel module driver\n");
+        printk(KERN_ERR "BAL module MY printk %s\n", __TIME__);
 	mutex_init(&bal.use_lock);
 	if (spi->dev.of_node) {
 		bal.busy_pin = of_get_named_gpio(spi->dev.of_node, "busy-pin-gpio", 0);
