@@ -248,7 +248,8 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
   xfers.tx_buf = bal.buffer;
   xfers.rx_buf = bal.rxBuffer;
   xfers.len = count;
-  //xfers.dma_addr_t tx_dma;
+
+  xfers.rx_dma = bal.buffer;
   xfers.rx_dma = bal.rxBuffer;
   //struct sg_table tx_sg;
   //struct sg_table rx_sg;
@@ -258,17 +259,20 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 
   xfers.bits_per_word = 8;
   xfers.delay_usecs = 0;
-  //u32 speed_hz;
+  xfers.speed_hz = bal.spi->max_speed_hz;
   //struct list_head transfer_list;
 //}; 
 
   uint16_t flags = bal.spi->master->flags;
-  printk(KERN_ERR "master flags = %04X\n", bal.spi->master->flags);
-  printk(KERN_ERR "mode flags = %04X\n", bal.spi->mode);
+  //printk(KERN_ERR "master flags = %04X\n", bal.spi->master->flags);
+  //printk(KERN_ERR "mode flags = %04X\n", bal.spi->mode);
+  printk(KERN_ERR "speed_hz = %d Hz\n", xfers.speed_hz);
+  
+  printk(KERN_ERR "speed_hz spidev= %d Hz\n", bal.spi->max_speed_hz);
 
 
-  status = __spi_validate(bal.spi, &xfers);
-  printk(KERN_ERR "status = %d\n", status);
+  //status = __spi_validate(bal.spi, &xfers);
+  //printk(KERN_ERR "status = %d\n", status);
 
 	if(bal.HalType == 0x02)
 	{
@@ -282,10 +286,10 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 	}
 	else
 	{
-		for(i = 0; i < count; i++) {
-			printk(KERN_ERR "before READ buffer[%d] = %d", i, bal.buffer[i]);
-			printk(KERN_ERR "before READ rxBuffer[%d] = %d", i, bal.rxBuffer[i]);
-		}
+		//for(i = 0; i < count; i++) {
+		//	printk(KERN_ERR "before READ buffer[%d] = %d", i, bal.buffer[i]);
+		//	printk(KERN_ERR "before READ rxBuffer[%d] = %d", i, bal.rxBuffer[i]);
+		//}
 		
 		//for(i = 0; i < count; i++)
 		//{
@@ -295,17 +299,17 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 		//}
 		//bal.buffer[0] = 0x00; // reader expets the first byte in the reply buffer 00h
 
-		//status = spi_sync_transfer (bal.spi, &xfers, 1);
+		status = spi_sync_transfer (bal.spi, &xfers, 1);
 
 		if(status != 0){
 			printk(KERN_ERR "status = %d = %04X\n", status, status);
 			return status;
 		}
 
-		for(i = 0; i < count; i++) {
-			printk(KERN_ERR "after READ buffer[%d] = %d", i, bal.buffer[i]);
-			printk(KERN_ERR "after READ rxBuffer[%d] = %d", i, bal.rxBuffer[i]);
-		}
+		//for(i = 0; i < count; i++) {
+		//	printk(KERN_ERR "after READ buffer[%d] = %d", i, bal.buffer[i]);
+		//	printk(KERN_ERR "after READ rxBuffer[%d] = %d", i, bal.rxBuffer[i]);
+		//}
 	
 		result = 0;
 	//if (copy_to_user(buf, &result, 1))
