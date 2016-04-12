@@ -123,36 +123,35 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 	{
 		for(i = 0; i < count; i++) {
 			printk(KERN_ERR "before READ buffer[%d] = %d", i, bal.buffer[i]);
-			printk(KERN_ERR "before READ rxBuffer[%d] = %d", i, bal.rxBuffer[i]);
+			//printk(KERN_ERR "before READ rxBuffer[%d] = %d", i, bal.rxBuffer[i]);
 		}
 		
-		//for(i = 0; i < count; i++)
-		//{
+		for(i = 0; i < count; i++)
+		{
 			//status = spi_write_then_read(bal.spi, bal.buffer, count,  bal.buffer, count);
-		//	result = spi_w8r8(bal.spi, bal.buffer[i]);						
-		//	bal.buffer[i] = (uint8_t)result;
-		//}
-		//bal.buffer[0] = 0x00; // reader expets the first byte in the reply buffer 00h
+			result = spi_w8r8(bal.spi, bal.buffer[i]);						
+			bal.buffer[i] = (uint8_t)result;
+			printk(KERN_ERR "result = %d\n", result);
+		}
 
 		//status = spi_sync_transfer (bal.spi, &xfers, 1);
-
-		if(status != 0){
-			printk(KERN_ERR "status = %d = %04X\n", status, status);
-			return status;
-		}
+		//if(status != 0){
+		//	printk(KERN_ERR "status = %d = %04X\n", status, status);
+		//	return status;
+		//}
 
 		for(i = 0; i < count; i++) {
 			printk(KERN_ERR "after READ buffer[%d] = %d", i, bal.buffer[i]);
-			printk(KERN_ERR "after READ rxBuffer[%d] = %d", i, bal.rxBuffer[i]);
+			//printk(KERN_ERR "after READ rxBuffer[%d] = %d", i, bal.rxBuffer[i]);
 		}
 	
 		result = 0;
-	//if (copy_to_user(buf, &result, 1))
-	//	return -EFAULT;
-	//if (copy_to_user(buf+1, bal.buffer, count-1))
-	//	return -EFAULT;
-	if (copy_to_user(buf, bal.rxBuffer, count))
+	if (copy_to_user(buf, &result, 1))
 		return -EFAULT;
+	if (copy_to_user(buf+1, bal.buffer, count-1))
+		return -EFAULT;
+	//if (copy_to_user(buf, bal.rxBuffer, count))
+	//	return -EFAULT;
 	
 	}
 	return count;
