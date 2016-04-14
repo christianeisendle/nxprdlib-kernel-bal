@@ -237,40 +237,8 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 	ssize_t			status = 0;
 
 	int i;
-	ssize_t result;
 	struct spi_transfer xfers;
 		
-	if (count > BAL_MAX_BUF_SIZE)
-		return -EMSGSIZE;
-	status = copy_from_user(bal.buffer, buf, count);
-	
-  //	struct spi_transfer {
-  xfers.tx_buf = bal.buffer;
-  xfers.rx_buf = bal.rxBuffer;
-  xfers.len = count;
-
-  xfers.rx_dma = bal.buffer;
-  xfers.rx_dma = bal.rxBuffer;
-  //struct sg_table tx_sg;
-  //struct sg_table rx_sg;
-
-  xfers.tx_nbits = SPI_NBITS_SINGLE;
-  xfers.rx_nbits = SPI_NBITS_SINGLE;
-
-  xfers.bits_per_word = 8;
-  xfers.delay_usecs = 0;
-  xfers.speed_hz = bal.spi->max_speed_hz;
-  //struct list_head transfer_list;
-//}; 
-
-  uint16_t flags = bal.spi->master->flags;
-  //printk(KERN_ERR "master flags = %04X\n", bal.spi->master->flags);
-  //printk(KERN_ERR "mode flags = %04X\n", bal.spi->mode);
-  printk(KERN_ERR "speed_hz = %d Hz\n", xfers.speed_hz);
-  
-  printk(KERN_ERR "speed_hz spidev= %d Hz\n", bal.spi->max_speed_hz);
-
-
   //status = __spi_validate(bal.spi, &xfers);
   //printk(KERN_ERR "status = %d\n", status);
 
@@ -286,6 +254,34 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 	}
 	else
 	{
+		  if (count > BAL_MAX_BUF_SIZE)
+			return -EMSGSIZE;
+		
+		  status = copy_from_user(bal.buffer, buf, count);
+	
+		  xfers.tx_buf = bal.buffer;
+		  xfers.rx_buf = bal.rxBuffer;
+		  xfers.len = count;
+
+		  xfers.rx_dma = bal.buffer;
+		  xfers.rx_dma = bal.rxBuffer;
+		  //struct sg_table tx_sg;
+		  //struct sg_table rx_sg;
+
+		  xfers.tx_nbits = SPI_NBITS_SINGLE;
+		  xfers.rx_nbits = SPI_NBITS_SINGLE;
+
+		  xfers.bits_per_word = 8;
+		  xfers.delay_usecs = 0;
+		  xfers.speed_hz = bal.spi->max_speed_hz;
+
+		  //printk(KERN_ERR "master flags = %04X\n", bal.spi->master->flags);
+		  //printk(KERN_ERR "mode flags = %04X\n", bal.spi->mode);
+		  printk(KERN_ERR "speed_hz = %d Hz\n", xfers.speed_hz);
+  
+		  printk(KERN_ERR "speed_hz spidev= %d Hz\n", bal.spi->max_speed_hz);
+
+
 		//for(i = 0; i < count; i++) {
 		//	printk(KERN_ERR "before READ buffer[%d] = %d", i, bal.buffer[i]);
 		//	printk(KERN_ERR "before READ rxBuffer[%d] = %d", i, bal.rxBuffer[i]);
@@ -311,15 +307,11 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 		//	printk(KERN_ERR "after READ rxBuffer[%d] = %d", i, bal.rxBuffer[i]);
 		//}
 	
-		result = 0;
-	//if (copy_to_user(buf, &result, 1))
-	//	return -EFAULT;
-	//if (copy_to_user(buf+1, bal.buffer, count-1))
-	//	return -EFAULT;
+	}
+
 	if (copy_to_user(buf, bal.rxBuffer, count))
 		return -EFAULT;
 	
-	}
 	return count;
 }
 
@@ -337,13 +329,16 @@ baldev_write(struct file *filp, const char __user *buf,
 		return status;
 	}
 
-	printk(KERN_ERR "WR filp=%d   buf=%02X,%02X  count=%d\n", filp, buf[0], buf[1], count);
+	//printk(KERN_ERR "WR filp=%d   buf=%02X,%02X  count=%d\n", filp, buf[0], buf[1], count);
 
 	if(bal.HalType == 2)
 	{
-		status = wait_for_busy_idle();
-		if (status == 0)
+		if (0 == status) {
+
+			if (status == 0) {
 				status = spi_write(bal.spi, bal.buffer, count);
+			}
+		}
 	}
 	else
 		status = spi_write(bal.spi, bal.buffer, count);
