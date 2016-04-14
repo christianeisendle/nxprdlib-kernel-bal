@@ -51,7 +51,7 @@ struct bal_data {
 	bool			in_use;
 	unsigned int		busy_pin;
 	u8	*		buffer;
-	u8	*		rxBuffer;
+	//u8	*		rxBuffer;
 	unsigned long		HalType;
 	unsigned long		MultiRegRW;
 };
@@ -103,18 +103,18 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 		  status = copy_from_user(bal.buffer, buf, count);
 	
 		  xfers.tx_buf = bal.buffer;
-		  xfers.rx_buf = bal.rxBuffer;
+		  xfers.rx_buf = bal.buffer;//rxBuffer;
 		  xfers.len = count;
 
-		  //xfers.rx_dma = bal.buffer;
-		  //xfers.rx_dma = bal.rxBuffer;
+		  //xfers.tx_dma = bal.buffer;
+		  //xfers.rx_dma = bal.buffer;//rxBuffer;
 
 		  xfers.tx_nbits = SPI_NBITS_SINGLE;
 		  xfers.rx_nbits = SPI_NBITS_SINGLE;
 
 		  xfers.bits_per_word = 8;
 		  xfers.delay_usecs = 0;
-		  xfers.speed_hz = bal.spi->max_speed_hz;
+		  xfers.speed_hz = 3e6;//bal.spi->max_speed_hz;
 
 		  //printk(KERN_ERR "master flags = %04X\n", bal.spi->master->flags);
 		  //printk(KERN_ERR "speed_hz = %d Hz\n", xfers.speed_hz);
@@ -145,7 +145,7 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 		//	printk(KERN_ERR "after READ rxBuffer[%d] = %d", i, bal.rxBuffer[i]);
 		//}
 
-		if (copy_to_user(buf, bal.rxBuffer, count))
+		if (copy_to_user(buf, bal.buffer/*rxBuffer*/, count))
 			return -EFAULT;	
 	}
 		
@@ -201,12 +201,12 @@ static int baldev_open(struct inode *inode, struct file *filp)
 		mutex_unlock(&bal.use_lock);
 		return -ENOMEM;
 	}
-	bal.rxBuffer = (uint8_t *)kmalloc(BAL_MAX_BUF_SIZE, GFP_KERNEL | GFP_DMA);
-	if (bal.rxBuffer == NULL) {
-		dev_err(&bal.spi->dev, "Unable to alloc memory!\n");
-		mutex_unlock(&bal.use_lock);
-		return -ENOMEM;
-	}
+	//bal.rxBuffer = (uint8_t *)kmalloc(BAL_MAX_BUF_SIZE, GFP_KERNEL | GFP_DMA);
+	//if (bal.rxBuffer == NULL) {
+	//	dev_err(&bal.spi->dev, "Unable to alloc memory!\n");
+	//	mutex_unlock(&bal.use_lock);
+	//	return -ENOMEM;
+	//}
 
 	bal.in_use = true;
 	mutex_unlock(&bal.use_lock);
