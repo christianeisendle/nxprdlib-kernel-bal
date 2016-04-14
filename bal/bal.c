@@ -74,163 +74,6 @@ wait_for_busy_idle(void)
 	return 0;
 }
 
- static int __spi_validate_bits_per_word(struct spi_master *master, u8 bits_per_word)
- {
-         if (master->bits_per_word_mask) {
-                 /* Only 32 bits fit in the mask */
-                 if (bits_per_word > 32)
-                         return printk(KERN_ERR "!!!VALIDATION_ERROR!!! - %d\n", __LINE__);//-EINVAL;
-                 if (!(master->bits_per_word_mask &
-                                 SPI_BPW_MASK(bits_per_word)))
-                         return printk(KERN_ERR "!!!VALIDATION_ERROR!!! - %d\n", __LINE__);//-EINVAL;
-         }
- 
-        return 0;
- }
-
-static int __spi_validate(struct spi_device *spi, struct spi_transfer *transfer)
-{
-         struct spi_master *master = spi->master;
-         struct spi_transfer *xfer = transfer;
-         int w_size;
-
-		 printk("%s\n", __FUNCTION__);
- 
-         //if (list_empty(&message->transfers))
-         //        return printk("!!!VALIDATION_ERROR!!! - %d\n", __LINE__);//-EINVAL;
- 
-         /* Half-duplex links include original MicroWire, and ones with
-          * only one data pin like SPI_3WIRE (switches direction) or where
-          * either MOSI or MISO is missing.  They can also be caused by
-          * software limitations.
-          */
-         if ((master->flags & SPI_MASTER_HALF_DUPLEX)
-                         || (spi->mode & SPI_3WIRE)) {
-                 unsigned flags = master->flags;
- 
-                 /*list_for_each_entry(xfer, &message->transfers, transfer_list)*/ {
-                         if (xfer->rx_buf && xfer->tx_buf)
-						 {
-							 printk(KERN_ERR "!!!VALIDATION_ERROR!!! - %d\n", __LINE__);//
-							 return -EINVAL;
-						 }                                 
-                         if ((flags & SPI_MASTER_NO_TX) && xfer->tx_buf)
-                         {
-							 printk(KERN_ERR "!!!VALIDATION_ERROR!!! - %d\n", __LINE__);//
-							 return -EINVAL;
-						 }
-                         if ((flags & SPI_MASTER_NO_RX) && xfer->rx_buf)
-                         {
-							 printk(KERN_ERR "!!!VALIDATION_ERROR!!! - %d\n", __LINE__);//
-							 return -EINVAL;
-						 }
-                 }
-         }
- 
-         /**
-          * Set transfer bits_per_word and max speed as spi device default if
-          * it is not set for this transfer.
-          * Set transfer tx_nbits and rx_nbits as single transfer default
-          * (SPI_NBITS_SINGLE) if it is not set for this transfer.
-          */
-         //message->frame_length = 0;
-         {
-                 //message->frame_length += xfer->len;
-                 if (!xfer->bits_per_word)
-                         xfer->bits_per_word = spi->bits_per_word;
- 
-                 if (!xfer->speed_hz)
-                         xfer->speed_hz = spi->max_speed_hz;
-                 if (!xfer->speed_hz)
-                         xfer->speed_hz = master->max_speed_hz;
- 
-                 if (master->max_speed_hz &&
-                     xfer->speed_hz > master->max_speed_hz)
-                         xfer->speed_hz = master->max_speed_hz;
- 
-                 if (__spi_validate_bits_per_word(master, xfer->bits_per_word))
-                         return -EINVAL;
- 
-                 /*
-                  * SPI transfer length should be multiple of SPI word size
-                  * where SPI word size should be power-of-two multiple
-                  */
-                 if (xfer->bits_per_word <= 8)
-                         w_size = 1;
-                 else if (xfer->bits_per_word <= 16)
-                         w_size = 2;
-                 else
-                         w_size = 4;
- 
-                 /* No partial transfers accepted */
-                 if (xfer->len % w_size)
-                         return -EINVAL;
- 
-                 if (xfer->speed_hz && master->min_speed_hz &&
-                     xfer->speed_hz < master->min_speed_hz)
-				 {
-                         printk(KERN_ERR "!!!VALIDATION_ERROR!!! - %d\n", __LINE__);
-						 return -EINVAL;
-				 }
- 
-                 if (xfer->tx_buf && !xfer->tx_nbits)
-                         xfer->tx_nbits = SPI_NBITS_SINGLE;
-                 if (xfer->rx_buf && !xfer->rx_nbits)
-                         xfer->rx_nbits = SPI_NBITS_SINGLE;
-                 /* check transfer tx/rx_nbits:
-                  * 1. check the value matches one of single, dual and quad
-                  * 2. check tx/rx_nbits match the mode in spi_device
-                  */
-                 if (xfer->tx_buf) {
-                         if (xfer->tx_nbits != SPI_NBITS_SINGLE &&
-                                 xfer->tx_nbits != SPI_NBITS_DUAL &&
-                                 xfer->tx_nbits != SPI_NBITS_QUAD)
-                                  {
-									printk(KERN_ERR "!!!VALIDATION_ERROR!!! - %d\n", __LINE__);
-									return -EINVAL;
-								}
-                         if ((xfer->tx_nbits == SPI_NBITS_DUAL) &&
-                                 !(spi->mode & (SPI_TX_DUAL | SPI_TX_QUAD)))
-                                  {
-									printk(KERN_ERR "!!!VALIDATION_ERROR!!! - %d\n", __LINE__);
-									 return -EINVAL;
-								}
-                         if ((xfer->tx_nbits == SPI_NBITS_QUAD) &&
-                                 !(spi->mode & SPI_TX_QUAD))
-                                  {
-									printk(KERN_ERR "!!!VALIDATION_ERROR!!! - %d\n", __LINE__);
-									 return -EINVAL;
-									}
-                 }
-                 /* check transfer rx_nbits */
-                 if (xfer->rx_buf) {
-                         if (xfer->rx_nbits != SPI_NBITS_SINGLE &&
-                                 xfer->rx_nbits != SPI_NBITS_DUAL &&
-                                 xfer->rx_nbits != SPI_NBITS_QUAD)
-                                  {
-									printk(KERN_ERR "!!!VALIDATION_ERROR!!! - %d\n", __LINE__);
-									return -EINVAL;
-									}
-                         if ((xfer->rx_nbits == SPI_NBITS_DUAL) &&
-                                 !(spi->mode & (SPI_RX_DUAL | SPI_RX_QUAD)))
-                                  {
-									printk(KERN_ERR "!!!VALIDATION_ERROR!!! - %d\n", __LINE__);
-									return -EINVAL;
-									}
-                         if ((xfer->rx_nbits == SPI_NBITS_QUAD) &&
-                                 !(spi->mode & SPI_RX_QUAD))
-                                  {
-										printk(KERN_ERR "!!!VALIDATION_ERROR!!! - %d\n", __LINE__);
-										return -EINVAL;
-									}
-                 }
-         }
- 
-         //message->status = -EINPROGRESS;
- 
-         return 0;
-}
-
 static ssize_t
 baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 {
@@ -238,10 +81,7 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 
 	int i;
 	struct spi_transfer xfers;
-		
-  //status = __spi_validate(bal.spi, &xfers);
-  //printk(KERN_ERR "status = %d\n", status);
-
+	
 	if(bal.HalType == 0x02)
 	{
 		status = wait_for_busy_idle();
@@ -266,10 +106,8 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 		  xfers.rx_buf = bal.rxBuffer;
 		  xfers.len = count;
 
-		  xfers.rx_dma = bal.buffer;
-		  xfers.rx_dma = bal.rxBuffer;
-		  //struct sg_table tx_sg;
-		  //struct sg_table rx_sg;
+		  //xfers.rx_dma = bal.buffer;
+		  //xfers.rx_dma = bal.rxBuffer;
 
 		  xfers.tx_nbits = SPI_NBITS_SINGLE;
 		  xfers.rx_nbits = SPI_NBITS_SINGLE;
@@ -279,10 +117,8 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 		  xfers.speed_hz = bal.spi->max_speed_hz;
 
 		  //printk(KERN_ERR "master flags = %04X\n", bal.spi->master->flags);
-		  //printk(KERN_ERR "mode flags = %04X\n", bal.spi->mode);
-		  printk(KERN_ERR "speed_hz = %d Hz\n", xfers.speed_hz);
-  
-		  printk(KERN_ERR "speed_hz spidev= %d Hz\n", bal.spi->max_speed_hz);
+		  //printk(KERN_ERR "speed_hz = %d Hz\n", xfers.speed_hz);
+		  //printk(KERN_ERR "speed_hz spidev= %d Hz\n", bal.spi->max_speed_hz);
 
 
 		//for(i = 0; i < count; i++) {
@@ -292,7 +128,6 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 		
 		//for(i = 0; i < count; i++)
 		//{
-			//status = spi_write_then_read(bal.spi, bal.buffer, count,  bal.buffer, count);
 		//	result = spi_w8r8(bal.spi, bal.buffer[i]);						
 		//	bal.buffer[i] = (uint8_t)result;
 		//}
@@ -331,8 +166,6 @@ baldev_write(struct file *filp, const char __user *buf,
 		return status;
 	}
 
-	//printk(KERN_ERR "WR filp=%d   buf=%02X,%02X  count=%d\n", filp, buf[0], buf[1], count);
-
 	if(bal.HalType == 2)
 	{
 		status = wait_for_busy_idle();
@@ -346,8 +179,7 @@ baldev_write(struct file *filp, const char __user *buf,
 	}
 	else
 		status = spi_write(bal.spi, bal.buffer, count);
-		//status = spi_write_then_read(bal.spi, bal.buffer, count,  bal.buffer, count);
-
+		
 	if (status < 0)
 		return status;
 
@@ -453,29 +285,6 @@ baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		default:
 			printk(KERN_ERR "NO option - default\n");
 			break;
-//		case PHBAL_REG_CONFIG_HAL_HW_TYPE:
-//			switch (arg) {
-//				case PHBAL_REG_HAL_HW_RC523:
-//					bal.wHalType = arg;
-//					break;
-//				case PHBAL_REG_HAL_HW_RC663:
-//					bal.wHalType = arg;
-//					break;
-//				case PHBAL_REG_HAL_HW_PN5180:
-//					bal.wHalType = arg;
-//					break;
-//				default:
-//					return PH_ADD_COMPCODE(PH_ERR_INVALID_PARAMETER, PH_COMP_BAL);
-//			}
-//			break;
-//
-//		case PHBAL_CONFIG_RW_MULTI_REG:
-//			bal.bMultiRegRW = arg;
-//			break;
-//
-//		default:
-//			return PH_ADD_COMPCODE(PH_ERR_UNSUPPORTED_PARAMETER, PH_COMP_BAL);
-//			break;
 	}
 
 	return status;
