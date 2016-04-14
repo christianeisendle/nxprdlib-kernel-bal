@@ -251,6 +251,9 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 			status = spi_read(bal.spi, bal.buffer, count);
 			printk(KERN_ERR "READ");
 		}
+
+		if (copy_to_user(buf, bal.buffer, count))
+			return -EFAULT;	
 	}
 	else
 	{
@@ -306,12 +309,11 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 		//	printk(KERN_ERR "after READ buffer[%d] = %d", i, bal.buffer[i]);
 		//	printk(KERN_ERR "after READ rxBuffer[%d] = %d", i, bal.rxBuffer[i]);
 		//}
-	
-	}
 
-	if (copy_to_user(buf, bal.rxBuffer, count))
-		return -EFAULT;
-	
+		if (copy_to_user(buf, bal.rxBuffer, count))
+			return -EFAULT;	
+	}
+		
 	return count;
 }
 
@@ -333,6 +335,8 @@ baldev_write(struct file *filp, const char __user *buf,
 
 	if(bal.HalType == 2)
 	{
+		status = wait_for_busy_idle();
+		
 		if (0 == status) {
 
 			if (status == 0) {
