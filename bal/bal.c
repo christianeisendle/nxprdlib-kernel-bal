@@ -114,7 +114,7 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 
 		  xfers.bits_per_word = 8;
 		  xfers.delay_usecs = 0;
-		  xfers.speed_hz = 3e6;//bal.spi->max_speed_hz;
+		  xfers.speed_hz = bal.spi->max_speed_hz;
 
 		  //printk(KERN_ERR "master flags = %04X\n", bal.spi->master->flags);
 		  //printk(KERN_ERR "speed_hz = %d Hz\n", xfers.speed_hz);
@@ -168,14 +168,15 @@ baldev_write(struct file *filp, const char __user *buf,
 
 	if(bal.HalType == 2)
 	{
+		//printk(KERN_ERR "WAS HERE!!! count: %d,  data: %02X-%02X-%02X ", count, bal.buffer[0], bal.buffer[1], bal.buffer[2]);
 		status = wait_for_busy_idle();
 		
-		if (0 == status) {
+		//if (0 == status) {
 
 			if (status == 0) {
 				status = spi_write(bal.spi, bal.buffer, count);
 			}
-		}
+		//}
 	}
 	else
 		status = spi_write(bal.spi, bal.buffer, count);
