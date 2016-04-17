@@ -52,6 +52,9 @@ struct bal_data {
 	unsigned int		busy_pin;
 	u8	*		buffer;
 	//u8	*		rxBuffer;
+
+	struct spi_transfer xfers;
+
 	unsigned long		HalType;
 	unsigned long		MultiRegRW;
 };
@@ -80,7 +83,7 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 	ssize_t			status = 0;
 
 	int i;
-	struct spi_transfer xfers;
+	//struct spi_transfer xfers;
 	
 	if(bal.HalType == 0x02)
 	{
@@ -102,24 +105,9 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 		
 		  status = copy_from_user(bal.buffer, buf, count);
 	
-		  xfers.tx_buf = bal.buffer;
-		  xfers.rx_buf = bal.buffer;//rxBuffer;
-		  xfers.len = count;
-
-		  //xfers.tx_dma = bal.buffer;
-		  //xfers.rx_dma = bal.buffer;//rxBuffer;
-
-		  xfers.tx_nbits = SPI_NBITS_SINGLE;
-		  xfers.rx_nbits = SPI_NBITS_SINGLE;
-
-		  xfers.bits_per_word = 8;
-		  xfers.delay_usecs = 0;
-		  xfers.speed_hz = bal.spi->max_speed_hz;
-
-		  //printk(KERN_ERR "master flags = %04X\n", bal.spi->master->flags);
-		  //printk(KERN_ERR "speed_hz = %d Hz\n", xfers.speed_hz);
-		  //printk(KERN_ERR "speed_hz spidev= %d Hz\n", bal.spi->max_speed_hz);
-
+		  bal.xfers.tx_buf = bal.buffer;
+		  bal.xfers.rx_buf = bal.buffer;//rxBuffer;
+		  bal.xfers.len = count;
 
 		//for(i = 0; i < count; i++) {
 		//	printk(KERN_ERR "before READ buffer[%d] = %d", i, bal.buffer[i]);
@@ -133,7 +121,7 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 		//}
 		//bal.buffer[0] = 0x00; // reader expets the first byte in the reply buffer 00h
 
-		status = spi_sync_transfer (bal.spi, &xfers, 1);
+		status = spi_sync_transfer (bal.spi, &(bal.xfers), 1);
 
 		if(status != 0){
 			printk(KERN_ERR "status = %d = %04X\n", status, status);
@@ -211,6 +199,16 @@ static int baldev_open(struct inode *inode, struct file *filp)
 
 	bal.in_use = true;
 	mutex_unlock(&bal.use_lock);
+
+	//bal.xfers.tx_dma = bal.buffer;
+	//bal.xfers.rx_dma = bal.buffer;//rxBuffer;
+
+	bal.xfers.tx_nbits = SPI_NBITS_SINGLE;
+	bal.xfers.rx_nbits = SPI_NBITS_SINGLE;
+
+	bal.xfers.bits_per_word = 8;
+	bal.xfers.delay_usecs = 1;
+	bal.xfers.speed_hz = bal.spi->max_speed_hz;
 
 	nonseekable_open(inode, filp);
 	try_module_get(THIS_MODULE);
