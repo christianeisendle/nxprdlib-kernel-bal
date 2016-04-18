@@ -82,9 +82,6 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 {
 	ssize_t			status = 0;
 
-	int i;
-	//struct spi_transfer xfers;
-	
 	if(bal.HalType == 0x02)
 	{
 		status = wait_for_busy_idle();
@@ -167,7 +164,14 @@ baldev_write(struct file *filp, const char __user *buf,
 		//}
 	}
 	else
-		status = spi_write(bal.spi, bal.buffer, count);
+	{
+		bal.xfers.tx_buf = bal.buffer;
+		bal.xfers.rx_buf = bal.buffer;//rxBuffer;
+		bal.xfers.len = count;
+
+		//status = spi_write(bal.spi, bal.buffer, count);
+		status = spi_sync_transfer (bal.spi, &(bal.xfers), 1);
+	}
 		
 	if (status < 0)
 		return status;
