@@ -82,6 +82,10 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 {
 	ssize_t			status = 0;
 
+	int i;
+
+	printk(KERN_ERR "READ MultiReg - count: %d\n", count);
+
 	if(bal.HalType == 0x02)
 	{
 		status = wait_for_busy_idle();
@@ -97,41 +101,65 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 	}
 	else
 	{
-		  if (count > BAL_MAX_BUF_SIZE)
-			return -EMSGSIZE;
 		
-		  status = copy_from_user(bal.buffer, buf, count);
+		if (count > BAL_MAX_BUF_SIZE)
+				return -EMSGSIZE;
+		
+		status = copy_from_user(bal.buffer, buf, count);
 	
-		  bal.xfers.tx_buf = bal.buffer;
-		  bal.xfers.rx_buf = bal.buffer;//rxBuffer;
-		  bal.xfers.len = count;
+		bal.xfers.tx_buf = bal.buffer;
+		bal.xfers.rx_buf = bal.buffer;//rxBuffer;
+		bal.xfers.len = count;
 
-		//for(i = 0; i < count; i++) {
-		//	printk(KERN_ERR "before READ buffer[%d] = %d", i, bal.buffer[i]);
-		//	printk(KERN_ERR "before READ rxBuffer[%d] = %d", i, bal.rxBuffer[i]);
-		//}
+		//"Fast" bundled exchange for EMVCo compatibility -- only necessary for PN512/RC663 derivatives
+		if( count < 1 )
+			return count;
 		
-		//for(i = 0; i < count; i++)
-		//{
-		//	result = spi_w8r8(bal.spi, bal.buffer[i]);						
-		//	bal.buffer[i] = (uint8_t)result;
-		//}
-		//bal.buffer[0] = 0x00; // reader expets the first byte in the reply buffer 00h
+	    if( ((bal.HalType == 1/*PHBAL_REG_HAL_HW_RC663*/) && ( (bal.buffer[0] & 0x01) == 0x01 ))
+	    	||  ((bal.HalType == 0/*PHBAL_REG_HAL_HW_RC523*/) && ( (bal.buffer[0] & 0x80) == 0x80 )) )
+	    {
+	    	printk(KERN_ERR "READ MultiReg\n");
+			
+			//Perform a "MultiRegRead" exchange
+	    	//This is a read operation
+			status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
+			if(status){
+				printk(KERN_ERR "Multi reg read status = %d = %04X\n", status, status);
+				return status;
+			}			
+			//return count;
+	    }
+		else
+		{
+			printk(KERN_ERR "READ\n");
 
-		status = spi_sync_transfer (bal.spi, &(bal.xfers), 1);
+			//for(i = 0; i < count; i++) {
+			//	printk(KERN_ERR "before READ buffer[%d] = %d", i, bal.buffer[i]);
+			//	printk(KERN_ERR "before READ rxBuffer[%d] = %d", i, bal.rxBuffer[i]);
+			//}
+		
+			//for(i = 0; i < count; i++)
+			//{
+			//	result = spi_w8r8(bal.spi, bal.buffer[i]);						
+			//	bal.buffer[i] = (uint8_t)result;
+			//}
+			//bal.buffer[0] = 0x00; // reader expets the first byte in the reply buffer 00h
 
-		if(status != 0){
-			printk(KERN_ERR "status = %d = %04X\n", status, status);
-			return status;
+			status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
+
+			if(status != 0){
+				printk(KERN_ERR "status = %d = %04X\n", status, status);
+				return status;
+			}			
 		}
 
-		//for(i = 0; i < count; i++) {
-		//	printk(KERN_ERR "after READ buffer[%d] = %d", i, bal.buffer[i]);
-		//	printk(KERN_ERR "after READ rxBuffer[%d] = %d", i, bal.rxBuffer[i]);
-		//}
+		for(i = 0; i < count; i++) {
+				printk(KERN_ERR "after READ buffer[%d] = %d", i, bal.buffer[i]);
+				//printk(KERN_ERR "after READ rxBuffer[%d] = %d", i, bal.buffer[i]);
+		}
 
 		if (copy_to_user(buf, bal.buffer/*rxBuffer*/, count))
-			return -EFAULT;	
+			return -EFAULT;
 	}
 		
 	return count;
@@ -143,6 +171,8 @@ baldev_write(struct file *filp, const char __user *buf,
 		size_t count, loff_t *f_pos)
 {
 	ssize_t status = 0;
+	size_t pos = 0;
+
 	if (count > BAL_MAX_BUF_SIZE) {
 		return -ENOMEM;
 	}
@@ -156,21 +186,37 @@ baldev_write(struct file *filp, const char __user *buf,
 		//printk(KERN_ERR "WAS HERE!!! count: %d,  data: %02X-%02X-%02X ", count, bal.buffer[0], bal.buffer[1], bal.buffer[2]);
 		status = wait_for_busy_idle();
 		
-		//if (0 == status) {
-
-			if (status == 0) {
-				status = spi_write(bal.spi, bal.buffer, count);
+		if (status == 0) {
+			status = spi_write(bal.spi, bal.buffer, count);
 			}
-		//}
 	}
 	else
 	{
-		bal.xfers.tx_buf = bal.buffer;
-		bal.xfers.rx_buf = bal.buffer;//rxBuffer;
-		bal.xfers.len = count;
+		if(bal.MultiRegRW == 4 && bal.HalType == 1/*RC663*/ )
+		{
+			while( pos < count )
+			{
+				bal.xfers.tx_buf = bal.buffer + pos;
+				bal.xfers.rx_buf = bal.buffer + pos;//rxBuffer;
+				bal.xfers.len = 2;
+				
+				status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
+				if(status < 0)
+					return status;
+				
+				//pTxBuffer += 2;
+				pos += 2;
+			}
+		}
+		else
+		{
+			bal.xfers.tx_buf = bal.buffer;
+			bal.xfers.rx_buf = bal.buffer;//rxBuffer;
+			bal.xfers.len = count;
 
-		//status = spi_write(bal.spi, bal.buffer, count);
-		status = spi_sync_transfer (bal.spi, &(bal.xfers), 1);
+			//status = spi_write(bal.spi, bal.buffer, count);
+			status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
+		}
 	}
 		
 	if (status < 0)
