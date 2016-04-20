@@ -84,7 +84,7 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 
 	int i;
 
-	printk(KERN_ERR "READ MultiReg - count: %d\n", count);
+	//printk(KERN_ERR "READ MultiReg - count: %d\n", count);
 
 	if(bal.HalType == 0x02)
 	{
@@ -115,10 +115,11 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 		if( count < 1 )
 			return count;
 		
-	    if( ((bal.HalType == 1/*PHBAL_REG_HAL_HW_RC663*/) && ( (bal.buffer[0] & 0x01) == 0x01 ))
-	    	||  ((bal.HalType == 0/*PHBAL_REG_HAL_HW_RC523*/) && ( (bal.buffer[0] & 0x80) == 0x80 )) )
+	    //if( ((bal.HalType == 1/*PHBAL_REG_HAL_HW_RC663*/) && ( (bal.buffer[0] & 0x01) == 0x01 ))
+	    //	||  ((bal.HalType == 0/*PHBAL_REG_HAL_HW_RC523*/) && ( (bal.buffer[0] & 0x80) == 0x80 )) )
+		if(bal.MultiRegRW == 1)
 	    {
-	    	printk(KERN_ERR "READ MultiReg\n");
+	    	printk(KERN_ERR "READ MultiReg - %d\n", bal.MultiRegRW);
 			
 			//Perform a "MultiRegRead" exchange
 	    	//This is a read operation
@@ -126,24 +127,17 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 			if(status){
 				printk(KERN_ERR "Multi reg read status = %d = %04X\n", status, status);
 				return status;
-			}			
+			}
+
+			for(i = 0; i < count; i++) {
+				printk(KERN_ERR "after READ buffer[%d] = %d", i, bal.buffer[i]);
+				//printk(KERN_ERR "after READ rxBuffer[%d] = %d", i, bal.buffer[i]);
+			}
 			//return count;
 	    }
 		else
 		{
-			printk(KERN_ERR "READ\n");
-
-			//for(i = 0; i < count; i++) {
-			//	printk(KERN_ERR "before READ buffer[%d] = %d", i, bal.buffer[i]);
-			//	printk(KERN_ERR "before READ rxBuffer[%d] = %d", i, bal.rxBuffer[i]);
-			//}
-		
-			//for(i = 0; i < count; i++)
-			//{
-			//	result = spi_w8r8(bal.spi, bal.buffer[i]);						
-			//	bal.buffer[i] = (uint8_t)result;
-			//}
-			//bal.buffer[0] = 0x00; // reader expets the first byte in the reply buffer 00h
+			//printk(KERN_ERR "normal READ\n");
 
 			status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
 
@@ -151,11 +145,6 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 				printk(KERN_ERR "status = %d = %04X\n", status, status);
 				return status;
 			}			
-		}
-
-		for(i = 0; i < count; i++) {
-				printk(KERN_ERR "after READ buffer[%d] = %d", i, bal.buffer[i]);
-				//printk(KERN_ERR "after READ rxBuffer[%d] = %d", i, bal.buffer[i]);
 		}
 
 		if (copy_to_user(buf, bal.buffer/*rxBuffer*/, count))
@@ -296,7 +285,7 @@ baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	//
 	//}
 	
-	dev_info(&bal.spi->dev, "%s : %d fp=%ld cmd=%ld arg=%lx\n", __FUNCTION__, __LINE__, (unsigned long int)filp, cmd, arg);
+	//dev_info(&bal.spi->dev, "%s : %d fp=%ld cmd=%ld arg=%lx\n", __FUNCTION__, __LINE__, (unsigned long int)filp, cmd, arg);
 	
 	switch (cmd) {
 		case BAL_IOC_BUSY_PIN:
@@ -322,13 +311,13 @@ baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		case BAL_IOC_HAL_HW_TYPE:
 			bal.HalType = arg;
 			status = 0;
-			dev_info(&bal.spi->dev, "BAL_IOC_HAL_HW_TYPE - %d - %d\n", cmd, (unsigned int)arg);
+			//dev_info(&bal.spi->dev, "BAL_IOC_HAL_HW_TYPE - %d - %d\n", cmd, (unsigned int)arg);
 			printk(KERN_INFO "HAL_HW_type %s - %d %u\n", __FUNCTION__, __LINE__, arg);
 			break;
 		case BAL_IOC_RW_MULTI_REG:
 			bal.MultiRegRW = arg;
 			status = 0;
-			dev_info(&bal.spi->dev, "BAL_IOC_RW_MULTI_REG - %d - %d\n", cmd, (unsigned int)arg);
+			//dev_info(&bal.spi->dev, "BAL_IOC_RW_MULTI_REG - %d - %d\n", cmd, (unsigned int)arg);
 			printk(KERN_INFO "multiREG %s - %d  %u\n", __FUNCTION__, __LINE__, arg);
 			break;
 		default:
