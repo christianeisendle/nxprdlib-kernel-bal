@@ -54,7 +54,7 @@ struct bal_data {
 static struct bal_data bal;
 static struct class *baldev_class;
 
-static ssize_t 
+static ssize_t
 wait_for_busy_idle(void)
 {
 	unsigned long tmo;
@@ -63,7 +63,7 @@ wait_for_busy_idle(void)
 		if (time_after(jiffies, tmo)) {
 			dev_err(&bal.spi->dev, "Timeout occured waiting for BUSY going low\n");
 			return -EBUSY;
-		}	
+		}
 	}
 	return 0;
 }
@@ -72,10 +72,10 @@ static ssize_t
 baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 {
 	ssize_t			status = 0;
-	
+
 	if (count > BAL_MAX_BUF_SIZE)
 		return -EMSGSIZE;
-	
+
 	status = wait_for_busy_idle();
 	if (0 == status) {
 		status = spi_read(bal.spi, bal.buffer, count);
@@ -220,7 +220,7 @@ static int bal_spi_probe(struct spi_device *spi)
 	bal.devt = MKDEV(BALDEV_MAJOR, BALDEV_MINOR);
 	device_create(baldev_class, &spi->dev, bal.devt,
 				    &bal, "bal");
-	
+
 	gpio_direction_input(bal.busy_pin);
 	spi_set_drvdata(spi, &bal);
 	return 0;
@@ -240,7 +240,7 @@ static struct spi_driver bal_spi_driver = {
 static int __init baldev_init(void)
 {
 	int status;
-	baldev_class = class_create(THIS_MODULE, "bal");	
+	baldev_class = class_create(THIS_MODULE, "bal");
 	status = register_chrdev(BALDEV_MAJOR, "bal", &baldev_fops);
 	printk(KERN_INFO "Registering character device /dev/bal. Status: %d\n", status);
 	return spi_register_driver(&bal_spi_driver);
@@ -255,6 +255,6 @@ static void __exit baldev_exit(void)
 }
 module_exit(baldev_exit);
 
-MODULE_AUTHOR("Christian Eisendle, <christian.eisendle@nxp.com>");
+MODULE_AUTHOR("Christian Eisendle, <christian@eisendle.net>");
 MODULE_DESCRIPTION("NXP RdLib BAL Kernel Module");
 MODULE_LICENSE("GPL");
