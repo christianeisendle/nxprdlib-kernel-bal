@@ -51,8 +51,7 @@ struct bal_data {
 	bool			in_use;
 	unsigned int		busy_pin;
 	u8	*		buffer;
-	//u8	*		rxBuffer;
-
+	
 	struct spi_transfer xfers;
 
 	unsigned long		HalType;
@@ -84,16 +83,12 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 
 	int i;
 
-	//printk(KERN_ERR "READ MultiReg - count: %d\n", count);
-
 	if(bal.HalType == 0x02)
 	{
 		status = wait_for_busy_idle();
 
 		if (0 == status) {
-			//printk(KERN_ERR "before READ filp=%d   buf=%02X,%02X,%02X,%02X  count=%d\n", filp, buf[0], buf[1], buf[2], buf[3], count);
 			status = spi_read(bal.spi, bal.buffer, count);
-			printk(KERN_ERR "READ");
 		}
 
 		if (copy_to_user(buf, bal.buffer, count))
@@ -108,46 +103,32 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 		status = copy_from_user(bal.buffer, buf, count);
 	
 		bal.xfers.tx_buf = bal.buffer;
-		bal.xfers.rx_buf = bal.buffer;//rxBuffer;
+		bal.xfers.rx_buf = bal.buffer;
 		bal.xfers.len = count;
 
 		//"Fast" bundled exchange for EMVCo compatibility -- only necessary for PN512/RC663 derivatives
 		if( count < 1 )
 			return count;
 		
-	    //if( ((bal.HalType == 1/*PHBAL_REG_HAL_HW_RC663*/) && ( (bal.buffer[0] & 0x01) == 0x01 ))
-	    //	||  ((bal.HalType == 0/*PHBAL_REG_HAL_HW_RC523*/) && ( (bal.buffer[0] & 0x80) == 0x80 )) )
+	    //This kenel module does not need to check read/write flag bit. It is upon caller do decide whether read or write.
 		if(bal.MultiRegRW == 1)
 	    {
-	    	printk(KERN_ERR "READ MultiReg - %d\n", bal.MultiRegRW);
-			
-			//Perform a "MultiRegRead" exchange
+	    	//Perform a "MultiRegRead" exchange
 	    	//This is a read operation
 			status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
-			if(status){
-				printk(KERN_ERR "Multi reg read status = %d = %04X\n", status, status);
-				return status;
-			}
 
-			for(i = 0; i < count; i++) {
-				printk(KERN_ERR "after READ buffer[%d] = %d", i, bal.buffer[i]);
-				//printk(KERN_ERR "after READ rxBuffer[%d] = %d", i, bal.buffer[i]);
-			}
-			//return count;
+			if(status)
+				return status;
 	    }
 		else
 		{
-			//printk(KERN_ERR "normal READ\n");
-
 			status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
 
-			if(status != 0){
-				printk(KERN_ERR "status = %d = %04X\n", status, status);
-				return status;
-			}			
+			if(status != 0)
+				return status;			
 		}
 
-		if (copy_to_user(buf, bal.buffer/*rxBuffer*/, count))
+		if (copy_to_user(buf, bal.buffer, count))
 			return -EFAULT;
 	}
 		
@@ -172,7 +153,6 @@ baldev_write(struct file *filp, const char __user *buf,
 
 	if(bal.HalType == 2)
 	{
-		//printk(KERN_ERR "WAS HERE!!! count: %d,  data: %02X-%02X-%02X ", count, bal.buffer[0], bal.buffer[1], bal.buffer[2]);
 		status = wait_for_busy_idle();
 		
 		if (status == 0) {
@@ -186,24 +166,22 @@ baldev_write(struct file *filp, const char __user *buf,
 			while( pos < count )
 			{
 				bal.xfers.tx_buf = bal.buffer + pos;
-				bal.xfers.rx_buf = bal.buffer + pos;//rxBuffer;
+				bal.xfers.rx_buf = bal.buffer + pos;
 				bal.xfers.len = 2;
 				
 				status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
 				if(status < 0)
 					return status;
-				
-				//pTxBuffer += 2;
+								
 				pos += 2;
 			}
 		}
 		else
 		{
 			bal.xfers.tx_buf = bal.buffer;
-			bal.xfers.rx_buf = bal.buffer;//rxBuffer;
+			bal.xfers.rx_buf = bal.buffer;
 			bal.xfers.len = count;
 
-			//status = spi_write(bal.spi, bal.buffer, count);
 			status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
 		}
 	}
@@ -229,18 +207,9 @@ static int baldev_open(struct inode *inode, struct file *filp)
 		mutex_unlock(&bal.use_lock);
 		return -ENOMEM;
 	}
-	//bal.rxBuffer = (uint8_t *)kmalloc(BAL_MAX_BUF_SIZE, GFP_KERNEL | GFP_DMA);
-	//if (bal.rxBuffer == NULL) {
-	//	dev_err(&bal.spi->dev, "Unable to alloc memory!\n");
-	//	mutex_unlock(&bal.use_lock);
-	//	return -ENOMEM;
-	//}
 
 	bal.in_use = true;
 	mutex_unlock(&bal.use_lock);
-
-	//bal.xfers.tx_dma = bal.buffer;
-	//bal.xfers.rx_dma = bal.buffer;//rxBuffer;
 
 	bal.xfers.tx_nbits = SPI_NBITS_SINGLE;
 	bal.xfers.rx_nbits = SPI_NBITS_SINGLE;
