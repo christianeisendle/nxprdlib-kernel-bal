@@ -198,6 +198,7 @@ static int bal_spi_remove(struct spi_device *spi)
 
 static int bal_spi_probe(struct spi_device *spi)
 {
+	struct device *dev;
 	dev_info(&spi->dev, "Probing BAL driver\n");
 	mutex_init(&bal.use_lock);
 	if (spi->dev.of_node) {
@@ -218,8 +219,12 @@ static int bal_spi_probe(struct spi_device *spi)
 	}
 	bal.spi = spi;
 	bal.devt = MKDEV(BALDEV_MAJOR, BALDEV_MINOR);
-	device_create(baldev_class, &spi->dev, bal.devt,
-				    &bal, "bal");
+
+	dev = device_create(baldev_class, &spi->dev, bal.devt, &bal, "bal");
+	if (IS_ERR(dev)) {
+		dev_err(&spi->dev, "Error creating device!\n");
+		return PTR_ERR(dev);
+	}
 
 	gpio_direction_input(bal.busy_pin);
 	spi_set_drvdata(spi, &bal);
