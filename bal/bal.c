@@ -241,9 +241,26 @@ static int __init baldev_init(void)
 {
 	int status;
 	baldev_class = class_create(THIS_MODULE, "bal");
+	if (IS_ERR(baldev_class)) {
+		return PTR_ERR(baldev_class);
+	}
 	status = register_chrdev(BALDEV_MAJOR, "bal", &baldev_fops);
-	printk(KERN_INFO "Registering character device /dev/bal. Status: %d\n", status);
-	return spi_register_driver(&bal_spi_driver);
+	if (status < 0) {
+		printk(KERN_ERR "Error registering character device for bal driver!\n");
+		goto err_reg_dev;
+	}
+	status = spi_register_driver(&bal_spi_driver);
+	if (status < 0) {
+		printk(KERN_ERR "Error registering BAL driver structure at SPI core!\n");
+		goto err_reg_drv;
+	}
+	return 0;
+
+err_reg_drv:
+	unregister_chrdev(BALDEV_MAJOR, BALDEV_NAME);
+err_reg_dev:
+	class_destroy(baldev_class);
+	return status;
 }
 module_init(baldev_init);
 
