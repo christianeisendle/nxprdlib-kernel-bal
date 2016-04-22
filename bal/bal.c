@@ -41,6 +41,10 @@
 #define BAL_IOC_HAL_HW_TYPE		3
 #define BAL_IOC_RW_MULTI_REG		4
 
+#define BAL_HAL_HW_RC523		0
+#define BAL_HAL_HW_RC663		1
+#define BAL_HAL_HW_PN5180		2
+
 struct bal_data {
 	dev_t			devt;
 	spinlock_t		spi_lock;
@@ -81,9 +85,7 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 {
 	ssize_t			status = 0;
 
-	int i;
-
-	if(bal.HalType == 0x02)
+	if(bal.HalType == BAL_HAL_HW_PN5180)
 	{
 		status = wait_for_busy_idle();
 
@@ -151,7 +153,7 @@ baldev_write(struct file *filp, const char __user *buf,
 		return status;
 	}
 
-	if(bal.HalType == 2)
+	if(bal.HalType == BAL_HAL_HW_PN5180)
 	{
 		status = wait_for_busy_idle();
 		
@@ -161,7 +163,7 @@ baldev_write(struct file *filp, const char __user *buf,
 	}
 	else
 	{
-		if(bal.MultiRegRW == 4 && bal.HalType == 1/*RC663*/ )
+		if(bal.MultiRegRW == 1 && bal.HalType == BAL_HAL_HW_RC663)
 		{
 			while( pos < count )
 			{
@@ -237,24 +239,9 @@ static long
 baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	//printk(KERN_ERR "%s : %d fp=%ld cmd=%ld arg=%lx\n", __FUNCTION__, __LINE__, (unsigned long int)filp, cmd, arg);
-	printk(KERN_ERR "my ioctl\n");
+	printk(KERN_ERR "my ioctl - cmd: %d - arg: %lu\n", cmd, arg);
 
 	int status = 0; //-EINVAL;
-
-	//if (cmd == BAL_IOC_BUSY_PIN) {
-	//	if (gpio_is_valid(arg)) {
-	//		status = gpio_request(arg, "BUSY pin");
-	//		if (!status) {
-	//			dev_info(&bal.spi->dev, "Setting BUSY pin to %d\n", (unsigned int)arg);
-	//			gpio_free(bal.busy_pin);
-	//				bal.busy_pin = (unsigned int)arg;
-	//			gpio_direction_input(bal.busy_pin);
-	//		}
-	//	}
-	//
-	//}
-	
-	//dev_info(&bal.spi->dev, "%s : %d fp=%ld cmd=%ld arg=%lx\n", __FUNCTION__, __LINE__, (unsigned long int)filp, cmd, arg);
 	
 	switch (cmd) {
 		case BAL_IOC_BUSY_PIN:
@@ -273,24 +260,24 @@ baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			//dev_info(&bal.spi->dev, "BAL_IOC_BUSY_PIN\n");
 			printk(KERN_ERR "busy pin\n");
 			break;
-		case 1:
-		case 2:
-			printk(KERN_ERR "uneffective option\n");
-			break;
+		//case 1:
+		//case 2:
+		//	printk(KERN_ERR "uneffective option\n");
+		//	break;
 		case BAL_IOC_HAL_HW_TYPE:
 			bal.HalType = arg;
 			status = 0;
 			//dev_info(&bal.spi->dev, "BAL_IOC_HAL_HW_TYPE - %d - %d\n", cmd, (unsigned int)arg);
-			printk(KERN_INFO "HAL_HW_type %s - %d %u\n", __FUNCTION__, __LINE__, arg);
+			printk(KERN_INFO "HAL_HW_type %s - %u %lu\n", __FUNCTION__, __LINE__, arg);
 			break;
 		case BAL_IOC_RW_MULTI_REG:
 			bal.MultiRegRW = arg;
 			status = 0;
 			//dev_info(&bal.spi->dev, "BAL_IOC_RW_MULTI_REG - %d - %d\n", cmd, (unsigned int)arg);
-			printk(KERN_INFO "multiREG %s - %d  %u\n", __FUNCTION__, __LINE__, arg);
+			printk(KERN_INFO "multiREG %s - %u  %lu\n", __FUNCTION__, __LINE__, arg);
 			break;
 		default:
-			printk(KERN_ERR "NO option - default\n");
+			printk(KERN_ERR "cmd: %d NO option - default\n", cmd);
 			break;
 	}
 
