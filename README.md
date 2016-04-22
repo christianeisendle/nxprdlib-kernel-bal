@@ -2,13 +2,13 @@
 
 ## General
 This is a linux kernel module for the NXP NFCRdLib BAL (Bus Abstraction Layer). 
-It allows having the BAL within the Kernel while the NFCRdLib runs in user space. This may be required in order to redurce the latency introduced by unnecessary context switches when BAL also runs in user space.
+It allows having the BAL within the Kernel while the NFCRdLib runs in user space. This may be required in order to reduce the latency introduced by unnecessary context switches when BAL also runs in user space.
 
 ## Build the Module
 ### Raspberry Pi
 If you look into an out-of-the-box working version for raspberry pi, refer to https://github.com/christianeisendle/linux
 
-### Generic
+### Other Platforms
 The module can be built out of the kernel tree ('extra' module). It requires the kernel sources checked out. The following example assumes that the kernel sources `/usr/src/linux-source` and this repo cloned to `/usr/src/nxprdlib-kernel-bal`.
 
 ```
@@ -17,7 +17,7 @@ make modules_prepare
 make M=/usr/src/nxprdlib-kernel-bal/bal 
 ```
 
-The compiled module is available in `/usr/src/nxprdlib-kernel-bal/bal.ko`. If it should be installed within the current system/kernel then `sudo make M=/usr/src/nxprdlib-kernel-bal modules_install` can be called. Alternatively, the module can be manually copied to `/lib/modules/YOUR_KERNEL_VERSION/extra` and `depmod -a` needs to be issued.
+The compiled module is available in `/usr/src/nxprdlib-kernel-bal/bal/bal.ko`. If it should be installed within the current system/kernel then `sudo make M=/usr/src/nxprdlib-kernel-bal/bal/nxprdlib-kernel-bal modules_install` can be called. Alternatively, the module can be manually copied to `/lib/modules/YOUR_KERNEL_VERSION/extra` and `depmod -a` needs to be issued.
 
 **Note:** In order to compile the module the correct `Module.symvers` file (corresponding to the kernel in use) must be present in `/usr/src/linux-source`. There are two ways to get to this file:
   1. Build the kernel from scratch. This also generates the `Module.symvers`
@@ -91,7 +91,7 @@ static struct spi_board_info bcm2708_spi_devices[] = {
 After applying these changes the Kernel needs to be recompiled.
 
 ## Load the Module
-The module requires an SPI device to be associated with it. The SPI device needs to be connected with the module using device tree (`compatible` string has to be set to `"nxp,bal"`) or using SPI board info (see above).
+The module requires an SPI device to be associated with it as well as a dedicated GPIO, configured as input which is connected to the BUSY pin of PN5180. The SPI device and the GPIO needs to be connected with the module using device tree (`compatible` string has to be set to `"nxp,bal"`) or using SPI board info (see above).
 An example device tree overlay can be found here: https://github.com/christianeisendle/linux/blob/rpi_4.1.19_bal/arch/arm/boot/dts/overlays/bal-overlay.dts
 
 On Raspberry Pi's device tree it can be added like this:

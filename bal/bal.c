@@ -55,7 +55,7 @@ struct bal_data {
 	bool			in_use;
 	unsigned int		busy_pin;
 	u8	*		buffer;
-	
+
 	struct spi_transfer xfers;
 
 	unsigned long		HalType;
@@ -66,7 +66,7 @@ struct bal_data {
 static struct bal_data bal;
 static struct class *baldev_class;
 
-static ssize_t 
+static ssize_t
 wait_for_busy_idle(void)
 {
 	unsigned long tmo;
@@ -75,7 +75,7 @@ wait_for_busy_idle(void)
 		if (time_after(jiffies, tmo)) {
 			dev_err(&bal.spi->dev, "Timeout occured waiting for BUSY going low\n");
 			return -EBUSY;
-		}	
+		}
 	}
 	return 0;
 }
@@ -85,25 +85,21 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 {
 	ssize_t			status = 0;
 
+	if (count > BAL_MAX_BUF_SIZE)
+		return -EMSGSIZE;
+
 	if(bal.HalType == BAL_HAL_HW_PN5180)
 	{
 		status = wait_for_busy_idle();
 
-		if (0 == status) {
+		if (0 == status)
 			status = spi_read(bal.spi, bal.buffer, count);
-		}
-
-		if (copy_to_user(buf, bal.buffer, count))
-			return -EFAULT;	
 	}
 	else
 	{
-		
-		if (count > BAL_MAX_BUF_SIZE)
-				return -EMSGSIZE;
-		
+
 		status = copy_from_user(bal.buffer, buf, count);
-	
+
 		bal.xfers.tx_buf = bal.buffer;
 		bal.xfers.rx_buf = bal.buffer;
 		bal.xfers.len = count;
@@ -111,7 +107,7 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 		//"Fast" bundled exchange for EMVCo compatibility -- only necessary for PN512/RC663 derivatives
 		if( count < 1 )
 			return count;
-		
+
 	    //This kenel module does not need to check read/write flag bit. It is upon caller do decide whether read or write.
 		if(bal.MultiRegRW == 1)
 	    {
@@ -127,13 +123,13 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 			status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
 
 			if(status != 0)
-				return status;			
+				return status;
 		}
-
-		if (copy_to_user(buf, bal.buffer, count))
-			return -EFAULT;
 	}
-		
+
+	if (copy_to_user(buf, bal.buffer, count))
+			return -EFAULT;
+
 	return count;
 }
 
@@ -156,7 +152,7 @@ baldev_write(struct file *filp, const char __user *buf,
 	if(bal.HalType == BAL_HAL_HW_PN5180)
 	{
 		status = wait_for_busy_idle();
-		
+
 		if (status == 0) {
 			status = spi_write(bal.spi, bal.buffer, count);
 			}
@@ -170,11 +166,11 @@ baldev_write(struct file *filp, const char __user *buf,
 				bal.xfers.tx_buf = bal.buffer + pos;
 				bal.xfers.rx_buf = bal.buffer + pos;
 				bal.xfers.len = 2;
-				
+
 				status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
 				if(status < 0)
 					return status;
-								
+
 				pos += 2;
 			}
 		}
@@ -187,7 +183,7 @@ baldev_write(struct file *filp, const char __user *buf,
 			status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
 		}
 	}
-		
+
 	if (status < 0)
 		return status;
 
@@ -242,7 +238,7 @@ baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	printk(KERN_ERR "my ioctl - cmd: %d - arg: %lu\n", cmd, arg);
 
 	int status = 0; //-EINVAL;
-	
+
 	switch (cmd) {
 		case BAL_IOC_BUSY_PIN:
 			printk(KERN_ERR "busy pin\n");
@@ -336,7 +332,7 @@ static int bal_spi_probe(struct spi_device *spi)
 	bal.devt = MKDEV(BALDEV_MAJOR, BALDEV_MINOR);
 	device_create(baldev_class, &spi->dev, bal.devt,
 				    &bal, "bal");
-	
+
 	gpio_direction_input(bal.busy_pin);
 	spi_set_drvdata(spi, &bal);
 	return 0;
@@ -356,7 +352,7 @@ static struct spi_driver bal_spi_driver = {
 static int __init baldev_init(void)
 {
 	int status;
-	baldev_class = class_create(THIS_MODULE, "bal");	
+	baldev_class = class_create(THIS_MODULE, "bal");
 	status = register_chrdev(BALDEV_MAJOR, "bal", &baldev_fops);
 	printk(KERN_INFO "Registering character device /dev/bal. Status: %d\n", status);
 	return spi_register_driver(&bal_spi_driver);
@@ -371,6 +367,6 @@ static void __exit baldev_exit(void)
 }
 module_exit(baldev_exit);
 
-MODULE_AUTHOR("Christian Eisendle, <christian.eisendle@nxp.com>");
+MODULE_AUTHOR("Christian Eisendle, <christian@eisendle.net>");
 MODULE_DESCRIPTION("NXP RdLib BAL Kernel Module");
 MODULE_LICENSE("GPL");
