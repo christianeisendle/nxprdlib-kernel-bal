@@ -35,7 +35,6 @@
 
 #define BAL_MAX_BUF_SIZE		1024
 #define BAL_BUSY_TIMEOUT_SECS		1
-#define BAL_IOC_BUSY_PIN                0
 
 
 struct bal_data {
@@ -153,18 +152,6 @@ static long
 baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	int status = -EINVAL;
-	if (cmd == BAL_IOC_BUSY_PIN) {
-		if (gpio_is_valid(arg)) {
-			status = gpio_request(arg, "BUSY pin");
-			if (!status) {
-				dev_info(&bal.spi->dev, "Setting BUSY pin to %d\n", (unsigned int)arg);
-				gpio_free(bal.busy_pin);
-				bal.busy_pin = (unsigned int)arg;
-				gpio_direction_input(bal.busy_pin);
-			}
-		}
-
-	}
 
 	return status;
 }
