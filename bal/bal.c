@@ -79,6 +79,8 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 	if (0 == status) {
 		status = spi_read(bal.spi, bal.buffer, count);
 	}
+	if (status < 0)
+		return status;
 
 	if (copy_to_user(buf, bal.buffer, count)) {
 		return -EFAULT;
@@ -101,14 +103,9 @@ baldev_write(struct file *filp, const char __user *buf,
 	}
 
 	status = wait_for_busy_idle();
-
 	if (0 == status) {
-
-		if (status == 0) {
-			status = spi_write(bal.spi, bal.buffer, count);
-		}
+		status = spi_write(bal.spi, bal.buffer, count);
 	}
-
 	if (status < 0)
 		return status;
 
