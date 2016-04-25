@@ -39,7 +39,6 @@
 #define BAL_IOC_HAL_HW_TYPE			3
 #define BAL_IOC_RW_MULTI_REG		4
 
-
 #define BAL_HAL_HW_RC523		0
 #define BAL_HAL_HW_RC663		1
 #define BAL_HAL_HW_PN5180		2
@@ -216,9 +215,9 @@ static int baldev_release(struct inode *inode, struct file *filp)
 static long
 baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-	dev_dbg(&(bal.spi->dev), "my ioctl - cmd: %d - arg: %lu\n", cmd, arg);
-
 	int status = -EINVAL;
+
+	dev_dbg(&(bal.spi->dev), "my ioctl - cmd: %d - arg: %lu\n", cmd, arg);
 
 	switch (cmd) {
 		//case 1:
