@@ -218,7 +218,7 @@ baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	dev_dbg(&(bal.spi->dev), "my ioctl - cmd: %d - arg: %lu\n", cmd, arg);
 
-	int status = 0; //-EINVAL;
+	int status = -EINVAL;
 
 	switch (cmd) {
 		case BAL_IOC_BUSY_PIN:
