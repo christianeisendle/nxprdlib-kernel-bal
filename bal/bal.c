@@ -29,8 +29,6 @@
 #include <linux/spi/bal_spi.h>
 #include <linux/uaccess.h>
 
-//#include <phbalReg.h>
-
 #define BALDEV_NAME "bal"
 #define BALDEV_MAJOR			100
 #define BALDEV_MINOR			0
@@ -97,34 +95,18 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 	}
 	else
 	{
-
 		status = copy_from_user(bal.buffer, buf, count);
 
 		bal.xfers.tx_buf = bal.buffer;
 		bal.xfers.rx_buf = bal.buffer;
 		bal.xfers.len = count;
 
-		//"Fast" bundled exchange for EMVCo compatibility -- only necessary for PN512/RC663 derivatives
-		if( count < 1 )
-			return count;
+		//This kenel module does not need to check read/write flag bit. It is upon caller do decide whether read or write.
+	    	//Perform a SPI exchange
+		status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
 
-	    //This kenel module does not need to check read/write flag bit. It is upon caller do decide whether read or write.
-		if(bal.MultiRegRW == 1)
-	    {
-	    	//Perform a "MultiRegRead" exchange
-	    	//This is a read operation
-			status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
-
-			if(status)
-				return status;
-	    }
-		else
-		{
-			status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
-
-			if(status != 0)
-				return status;
-		}
+		if(status)
+			return status;
 	}
 
 	if (copy_to_user(buf, bal.buffer, count))
@@ -234,17 +216,14 @@ static int baldev_release(struct inode *inode, struct file *filp)
 static long
 baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-	//printk(KERN_ERR "%s : %d fp=%ld cmd=%ld arg=%lx\n", __FUNCTION__, __LINE__, (unsigned long int)filp, cmd, arg);
-	printk(KERN_ERR "my ioctl - cmd: %d - arg: %lu\n", cmd, arg);
+	dev_dbg(&(bal.spi->dev), "my ioctl - cmd: %d - arg: %lu\n", cmd, arg);
 
 	int status = 0; //-EINVAL;
 
 	switch (cmd) {
 		case BAL_IOC_BUSY_PIN:
-			printk(KERN_ERR "busy pin\n");
 			if (gpio_is_valid(arg)) {
 				dev_info(&bal.spi->dev, "Requesting BUSY pin\n");
-				printk(KERN_ERR "Requesting BUSY pin\n");
 				status = gpio_request(arg, "BUSY pin");
 				if (!status) {
 					dev_info(&bal.spi->dev, "Setting BUSY pin to %d\n", (unsigned int)arg);
@@ -253,27 +232,23 @@ baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 					gpio_direction_input(bal.busy_pin);
 				}
 			}
-			//dev_info(&bal.spi->dev, "BAL_IOC_BUSY_PIN\n");
-			printk(KERN_ERR "busy pin\n");
 			break;
 		//case 1:
 		//case 2:
-		//	printk(KERN_ERR "uneffective option\n");
+		//	dev_dbg(&(bal.spi->dev), "uneffective option\n");
 		//	break;
 		case BAL_IOC_HAL_HW_TYPE:
 			bal.HalType = arg;
 			status = 0;
-			//dev_info(&bal.spi->dev, "BAL_IOC_HAL_HW_TYPE - %d - %d\n", cmd, (unsigned int)arg);
-			printk(KERN_INFO "HAL_HW_type %s - %u %lu\n", __FUNCTION__, __LINE__, arg);
+			dev_dbg(&(bal.spi->dev), "HAL_HW_type %lu\n", arg);
 			break;
 		case BAL_IOC_RW_MULTI_REG:
 			bal.MultiRegRW = arg;
 			status = 0;
-			//dev_info(&bal.spi->dev, "BAL_IOC_RW_MULTI_REG - %d - %d\n", cmd, (unsigned int)arg);
-			printk(KERN_INFO "multiREG %s - %u  %lu\n", __FUNCTION__, __LINE__, arg);
+			dev_dbg(&(bal.spi->dev), "multiREG %lu\n", arg);
 			break;
 		default:
-			printk(KERN_ERR "cmd: %d NO option - default\n", cmd);
+			dev_dbg(&(bal.spi->dev), "cmd: %d NO option - default\n", cmd);
 			break;
 	}
 
@@ -309,8 +284,7 @@ static int bal_spi_remove(struct spi_device *spi)
 
 static int bal_spi_probe(struct spi_device *spi)
 {
-	dev_info(&spi->dev, "Probing BAL kernel module driver\n");
-        printk(KERN_ERR "BAL module MY printk %s\n", __TIME__);
+	dev_info(&spi->dev, "Probing BAL driver\n");
 	mutex_init(&bal.use_lock);
 	if (spi->dev.of_node) {
 		bal.busy_pin = of_get_named_gpio(spi->dev.of_node, "busy-pin-gpio", 0);
