@@ -35,9 +35,10 @@
 
 #define BAL_MAX_BUF_SIZE		1024
 #define BAL_BUSY_TIMEOUT_SECS		1
-#define BAL_IOC_BUSY_PIN                0
-#define BAL_IOC_HAL_HW_TYPE		3
+
+#define BAL_IOC_HAL_HW_TYPE			3
 #define BAL_IOC_RW_MULTI_REG		4
+
 
 #define BAL_HAL_HW_RC523		0
 #define BAL_HAL_HW_RC663		1
@@ -92,6 +93,8 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 
 		if (0 == status)
 			status = spi_read(bal.spi, bal.buffer, count);
+		if (status < 0)
+			return status;
 	}
 	else
 	{
@@ -102,7 +105,7 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 		bal.xfers.len = count;
 
 		//This kenel module does not need to check read/write flag bit. It is upon caller do decide whether read or write.
-	    	//Perform a SPI exchange
+		//Perform a SPI exchange
 		status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
 
 		if(status)
@@ -134,10 +137,8 @@ baldev_write(struct file *filp, const char __user *buf,
 	if(bal.HalType == BAL_HAL_HW_PN5180)
 	{
 		status = wait_for_busy_idle();
-
-		if (status == 0) {
+		if (status == 0)
 			status = spi_write(bal.spi, bal.buffer, count);
-			}
 	}
 	else
 	{
@@ -165,7 +166,6 @@ baldev_write(struct file *filp, const char __user *buf,
 			status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
 		}
 	}
-
 	if (status < 0)
 		return status;
 
@@ -221,18 +221,6 @@ baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	int status = -EINVAL;
 
 	switch (cmd) {
-		case BAL_IOC_BUSY_PIN:
-			if (gpio_is_valid(arg)) {
-				dev_info(&bal.spi->dev, "Requesting BUSY pin\n");
-				status = gpio_request(arg, "BUSY pin");
-				if (!status) {
-					dev_info(&bal.spi->dev, "Setting BUSY pin to %d\n", (unsigned int)arg);
-					gpio_free(bal.busy_pin);
-					bal.busy_pin = (unsigned int)arg;
-					gpio_direction_input(bal.busy_pin);
-				}
-			}
-			break;
 		//case 1:
 		//case 2:
 		//	dev_dbg(&(bal.spi->dev), "uneffective option\n");
@@ -284,6 +272,7 @@ static int bal_spi_remove(struct spi_device *spi)
 
 static int bal_spi_probe(struct spi_device *spi)
 {
+	struct device *dev;
 	dev_info(&spi->dev, "Probing BAL driver\n");
 	mutex_init(&bal.use_lock);
 	if (spi->dev.of_node) {
@@ -304,8 +293,12 @@ static int bal_spi_probe(struct spi_device *spi)
 	}
 	bal.spi = spi;
 	bal.devt = MKDEV(BALDEV_MAJOR, BALDEV_MINOR);
-	device_create(baldev_class, &spi->dev, bal.devt,
-				    &bal, "bal");
+
+	dev = device_create(baldev_class, &spi->dev, bal.devt, &bal, "bal");
+	if (IS_ERR(dev)) {
+		dev_err(&spi->dev, "Error creating device!\n");
+		return PTR_ERR(dev);
+	}
 
 	gpio_direction_input(bal.busy_pin);
 	spi_set_drvdata(spi, &bal);
@@ -327,9 +320,26 @@ static int __init baldev_init(void)
 {
 	int status;
 	baldev_class = class_create(THIS_MODULE, "bal");
+	if (IS_ERR(baldev_class)) {
+		return PTR_ERR(baldev_class);
+	}
 	status = register_chrdev(BALDEV_MAJOR, "bal", &baldev_fops);
-	printk(KERN_INFO "Registering character device /dev/bal. Status: %d\n", status);
-	return spi_register_driver(&bal_spi_driver);
+	if (status < 0) {
+		printk(KERN_ERR "Error registering character device for bal driver!\n");
+		goto err_reg_dev;
+	}
+	status = spi_register_driver(&bal_spi_driver);
+	if (status < 0) {
+		printk(KERN_ERR "Error registering BAL driver structure at SPI core!\n");
+		goto err_reg_drv;
+	}
+	return 0;
+
+err_reg_drv:
+	unregister_chrdev(BALDEV_MAJOR, BALDEV_NAME);
+err_reg_dev:
+	class_destroy(baldev_class);
+	return status;
 }
 module_init(baldev_init);
 
