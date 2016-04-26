@@ -81,6 +81,8 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 {
 	ssize_t			status = 0;
 
+	uint8_t			readFlag = 0;
+
 	if (count > BAL_MAX_BUF_SIZE)
 		return -EMSGSIZE;
 
@@ -92,6 +94,8 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 			status = spi_read(bal.spi, bal.buffer, count);
 		if (status < 0)
 			return status;
+		if (copy_to_user(buf, bal.buffer, count))
+			return -EFAULT;
 	}
 	else
 	{
@@ -101,16 +105,19 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 		bal.xfers.rx_buf = bal.buffer;
 		bal.xfers.len = count;
 
-		//This kenel module does not need to check read/write flag bit. It is upon caller do decide whether read or write.
-		//Perform a SPI exchange
-		status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
+		if(bal.HalType == BAL_HAL_HW_RC523)
+			readFlag = bal.buffer[0] & 0x80;
 
+		if(bal.HalType == BAL_HAL_HW_RC663)
+			readFlag = bal.buffer[0] & 0x01;
+
+		status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
 		if(status)
 			return status;
+		if(readFlag != 0)
+			if (copy_to_user(buf, bal.buffer, count))
+				return -EFAULT;
 	}
-
-	if (copy_to_user(buf, bal.buffer, count))
-			return -EFAULT;
 
 	return count;
 }
@@ -125,25 +132,20 @@ baldev_write(struct file *filp, const char __user *buf,
 	if (count > BAL_MAX_BUF_SIZE) {
 		return -ENOMEM;
 	}
-	status = copy_from_user(bal.buffer, buf, count);
-	if (status) {
-		return status;
-	}
 
 	if(bal.HalType == BAL_HAL_HW_PN5180)
 	{
+		status = copy_from_user(bal.buffer, buf, count);
+		if (status)
+			return status;
+
 		status = wait_for_busy_idle();
 		if (status == 0)
 			status = spi_write(bal.spi, bal.buffer, count);
 	}
 	else
-	{
-		bal.xfers.tx_buf = bal.buffer;
-		bal.xfers.rx_buf = bal.buffer;
-		bal.xfers.len = count;
+		status = EBADE; //invalid exchange
 
-		status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
-	}
 	if (status < 0)
 		return status;
 
@@ -175,6 +177,8 @@ static int baldev_open(struct inode *inode, struct file *filp)
 	bal.xfers.bits_per_word = 8;
 	bal.xfers.delay_usecs = 1;
 	bal.xfers.speed_hz = bal.spi->max_speed_hz;
+
+	bal.HalType = BAL_HAL_HW_PN5180;
 
 	nonseekable_open(inode, filp);
 	try_module_get(THIS_MODULE);
