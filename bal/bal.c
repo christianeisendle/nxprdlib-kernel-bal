@@ -37,7 +37,6 @@
 #define BAL_BUSY_TIMEOUT_SECS		1
 
 #define BAL_IOC_HAL_HW_TYPE			3
-#define BAL_IOC_RW_MULTI_REG		4
 
 #define BAL_HAL_HW_RC523		0
 #define BAL_HAL_HW_RC663		1
@@ -57,7 +56,6 @@ struct bal_data {
 	struct spi_transfer xfers;
 
 	unsigned long		HalType;
-	unsigned long		MultiRegRW;
 };
 
 
@@ -123,7 +121,6 @@ baldev_write(struct file *filp, const char __user *buf,
 		size_t count, loff_t *f_pos)
 {
 	ssize_t status = 0;
-	size_t pos = 0;
 
 	if (count > BAL_MAX_BUF_SIZE) {
 		return -ENOMEM;
@@ -141,29 +138,11 @@ baldev_write(struct file *filp, const char __user *buf,
 	}
 	else
 	{
-		if(bal.MultiRegRW == 1 && bal.HalType == BAL_HAL_HW_RC663)
-		{
-			while( pos < count )
-			{
-				bal.xfers.tx_buf = bal.buffer + pos;
-				bal.xfers.rx_buf = bal.buffer + pos;
-				bal.xfers.len = 2;
+		bal.xfers.tx_buf = bal.buffer;
+		bal.xfers.rx_buf = bal.buffer;
+		bal.xfers.len = count;
 
-				status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
-				if(status < 0)
-					return status;
-
-				pos += 2;
-			}
-		}
-		else
-		{
-			bal.xfers.tx_buf = bal.buffer;
-			bal.xfers.rx_buf = bal.buffer;
-			bal.xfers.len = count;
-
-			status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
-		}
+		status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
 	}
 	if (status < 0)
 		return status;
@@ -228,11 +207,6 @@ baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			bal.HalType = arg;
 			status = 0;
 			dev_dbg(&(bal.spi->dev), "HAL_HW_type %lu\n", arg);
-			break;
-		case BAL_IOC_RW_MULTI_REG:
-			bal.MultiRegRW = arg;
-			status = 0;
-			dev_dbg(&(bal.spi->dev), "multiREG %lu\n", arg);
 			break;
 		default:
 			dev_dbg(&(bal.spi->dev), "cmd: %d NO option - default\n", cmd);
