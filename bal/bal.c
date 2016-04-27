@@ -36,6 +36,11 @@
 #define BAL_MAX_BUF_SIZE		1024
 #define BAL_BUSY_TIMEOUT_SECS		1
 
+#define BAL_IOC_HAL_HW_TYPE			3
+
+#define BAL_HAL_HW_RC523		0
+#define BAL_HAL_HW_RC663		1
+#define BAL_HAL_HW_PN5180		2
 
 struct bal_data {
 	dev_t			devt;
@@ -47,6 +52,10 @@ struct bal_data {
 	bool			in_use;
 	unsigned int		busy_pin;
 	u8	*		buffer;
+
+	struct spi_transfer xfers;
+
+	unsigned long		HalType;
 };
 
 
@@ -72,19 +81,44 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 {
 	ssize_t			status = 0;
 
+	uint8_t			readFlag = 0;
+
 	if (count > BAL_MAX_BUF_SIZE)
 		return -EMSGSIZE;
 
-	status = wait_for_busy_idle();
-	if (0 == status) {
-		status = spi_read(bal.spi, bal.buffer, count);
-	}
-	if (status < 0)
-		return status;
+	if(bal.HalType == BAL_HAL_HW_PN5180)
+	{
+		status = wait_for_busy_idle();
 
-	if (copy_to_user(buf, bal.buffer, count)) {
-		return -EFAULT;
+		if (0 == status)
+			status = spi_read(bal.spi, bal.buffer, count);
+		if (status < 0)
+			return status;
+		if (copy_to_user(buf, bal.buffer, count))
+			return -EFAULT;
 	}
+	else
+	{
+		status = copy_from_user(bal.buffer, buf, count);
+
+		bal.xfers.tx_buf = bal.buffer;
+		bal.xfers.rx_buf = bal.buffer;
+		bal.xfers.len = count;
+
+		if(bal.HalType == BAL_HAL_HW_RC523)
+			readFlag = bal.buffer[0] & 0x80;
+
+		if(bal.HalType == BAL_HAL_HW_RC663)
+			readFlag = bal.buffer[0] & 0x01;
+
+		status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
+		if(status)
+			return status;
+		if(readFlag != 0)
+			if (copy_to_user(buf, bal.buffer, count))
+				return -EFAULT;
+	}
+
 	return count;
 }
 
@@ -94,18 +128,24 @@ baldev_write(struct file *filp, const char __user *buf,
 		size_t count, loff_t *f_pos)
 {
 	ssize_t status = 0;
+
 	if (count > BAL_MAX_BUF_SIZE) {
 		return -ENOMEM;
 	}
-	status = copy_from_user(bal.buffer, buf, count);
-	if (status) {
-		return status;
-	}
 
-	status = wait_for_busy_idle();
-	if (0 == status) {
-		status = spi_write(bal.spi, bal.buffer, count);
+	if(bal.HalType == BAL_HAL_HW_PN5180)
+	{
+		status = copy_from_user(bal.buffer, buf, count);
+		if (status)
+			return status;
+
+		status = wait_for_busy_idle();
+		if (status == 0)
+			status = spi_write(bal.spi, bal.buffer, count);
 	}
+	else
+		status = EBADE; //invalid exchange
+
 	if (status < 0)
 		return status;
 
@@ -121,14 +161,24 @@ static int baldev_open(struct inode *inode, struct file *filp)
 		mutex_unlock(&bal.use_lock);
 		return -EBUSY;
 	}
-	bal.buffer = kmalloc(BAL_MAX_BUF_SIZE, GFP_KERNEL | GFP_DMA);
+	bal.buffer = (uint8_t *)kmalloc(BAL_MAX_BUF_SIZE, GFP_KERNEL | GFP_DMA);
 	if (bal.buffer == NULL) {
 		dev_err(&bal.spi->dev, "Unable to alloc memory!\n");
 		mutex_unlock(&bal.use_lock);
 		return -ENOMEM;
 	}
+
 	bal.in_use = true;
 	mutex_unlock(&bal.use_lock);
+
+	bal.xfers.tx_nbits = SPI_NBITS_SINGLE;
+	bal.xfers.rx_nbits = SPI_NBITS_SINGLE;
+
+	bal.xfers.bits_per_word = 8;
+	bal.xfers.delay_usecs = 1;
+	bal.xfers.speed_hz = bal.spi->max_speed_hz;
+
+	bal.HalType = BAL_HAL_HW_PN5180;
 
 	nonseekable_open(inode, filp);
 	try_module_get(THIS_MODULE);
@@ -149,6 +199,23 @@ static long
 baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	int status = -EINVAL;
+
+	dev_dbg(&(bal.spi->dev), "my ioctl - cmd: %d - arg: %lu\n", cmd, arg);
+
+	switch (cmd) {
+		//case 1:
+		//case 2:
+		//	dev_dbg(&(bal.spi->dev), "uneffective option\n");
+		//	break;
+		case BAL_IOC_HAL_HW_TYPE:
+			bal.HalType = arg;
+			status = 0;
+			dev_dbg(&(bal.spi->dev), "HAL_HW_type %lu\n", arg);
+			break;
+		default:
+			dev_dbg(&(bal.spi->dev), "cmd: %d NO option - default\n", cmd);
+			break;
+	}
 
 	return status;
 }
