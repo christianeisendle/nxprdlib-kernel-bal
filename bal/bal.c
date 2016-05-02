@@ -36,8 +36,6 @@
 #define BAL_MAX_BUF_SIZE		1024
 #define BAL_BUSY_TIMEOUT_SECS		1
 
-#define BAL_IOC_HAL_HW_TYPE			3
-
 #define BAL_HAL_HW_RC523		0
 #define BAL_HAL_HW_RC663		1
 #define BAL_HAL_HW_PN5180		2
@@ -197,18 +195,7 @@ static long
 baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	int status = -EINVAL;
-
-	switch (cmd) {
-		case BAL_IOC_HAL_HW_TYPE:
-			bal.HalType = arg;
-			status = 0;
-			dev_dbg(&(bal.spi->dev), "HAL_HW_type %lu\n", arg);
-			break;
-		default:
-			dev_dbg(&(bal.spi->dev), "cmd: %d NO option - default\n", cmd);
-			break;
-	}
-
+	
 	return status;
 }
 
