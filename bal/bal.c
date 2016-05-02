@@ -178,8 +178,6 @@ static int baldev_open(struct inode *inode, struct file *filp)
 	bal.xfers.delay_usecs = 1;
 	bal.xfers.speed_hz = bal.spi->max_speed_hz;
 
-	bal.HalType = BAL_HAL_HW_PN5180;
-
 	nonseekable_open(inode, filp);
 	try_module_get(THIS_MODULE);
 
@@ -200,13 +198,7 @@ baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	int status = -EINVAL;
 
-	dev_dbg(&(bal.spi->dev), "my ioctl - cmd: %d - arg: %lu\n", cmd, arg);
-
 	switch (cmd) {
-		//case 1:
-		//case 2:
-		//	dev_dbg(&(bal.spi->dev), "uneffective option\n");
-		//	break;
 		case BAL_IOC_HAL_HW_TYPE:
 			bal.HalType = arg;
 			status = 0;
@@ -250,10 +242,37 @@ static int bal_spi_remove(struct spi_device *spi)
 static int bal_spi_probe(struct spi_device *spi)
 {
 	struct device *dev;
+	int value = -1;
+	uint32_t * pValue = &value;
+	int status = -1;
+	
 	dev_info(&spi->dev, "Probing BAL driver\n");
 	mutex_init(&bal.use_lock);
+
 	if (spi->dev.of_node) {
 		bal.busy_pin = of_get_named_gpio(spi->dev.of_node, "busy-pin-gpio", 0);
+
+		status = of_property_read_u32_index(spi->dev.of_node, "NFC-reader-chip", 0, pValue);
+		
+		if(status == 0)
+			switch(*pValue)
+			{
+				case 0:
+					dev_info(&spi->dev, "PN512 reader chip\n");
+					bal.HalType = (unsigned long)*pValue;
+					break;
+				case 1:
+					dev_info(&spi->dev, "RC663 reader chip\n");
+					bal.HalType = (unsigned long)*pValue;
+					break;
+				case 2:
+				default :  /* If no other specified, PN5180 reader chip chosen as default by the BAL module. */
+					dev_info(&spi->dev, "PN5180 reader chip\n");
+					bal.HalType = (unsigned long)*pValue;
+					break;
+			}
+			else
+				dev_err(&spi->dev, "Error while parsing reader chip information from Device Tree!\n");
 	}
 	else {
 		struct bal_spi_platform_data * platform_data = spi->dev.platform_data;
