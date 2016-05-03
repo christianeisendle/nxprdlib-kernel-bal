@@ -36,6 +36,8 @@
 #define BAL_MAX_BUF_SIZE		1024
 #define BAL_BUSY_TIMEOUT_SECS		1
 
+#define BAL_IOC_RW_MULTI_REG		4
+
 #define BAL_HAL_HW_RC523		0
 #define BAL_HAL_HW_RC663		1
 #define BAL_HAL_HW_PN5180		2
@@ -54,6 +56,7 @@ struct bal_data {
 	struct spi_transfer xfers;
 
 	unsigned long		HalType;
+	unsigned long		MultiRegRW;
 };
 
 
@@ -81,6 +84,8 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 
 	uint8_t			readFlag = 0;
 
+	size_t pos = 0;
+
 	if (count > BAL_MAX_BUF_SIZE)
 		return -EMSGSIZE;
 
@@ -99,9 +104,6 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 	{
 		status = copy_from_user(bal.buffer, buf, count);
 
-		bal.xfers.tx_buf = bal.buffer;
-		bal.xfers.rx_buf = bal.buffer;
-		bal.xfers.len = count;
 
 		if(bal.HalType == BAL_HAL_HW_RC523)
 			readFlag = bal.buffer[0] & 0x80;
@@ -109,9 +111,35 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 		if(bal.HalType == BAL_HAL_HW_RC663)
 			readFlag = bal.buffer[0] & 0x01;
 
-		status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
-		if(status)
-			return status;
+		/* Perform special multireg write only for RC663 */
+		if(bal.MultiRegRW == 1 && bal.HalType == BAL_HAL_HW_RC663 && readFlag == 0)
+		{
+			while( pos < count )
+			{
+				bal.xfers.tx_buf = bal.buffer + pos;
+				bal.xfers.rx_buf = bal.buffer + pos;
+				bal.xfers.len = 2;
+
+				status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
+				if(status < 0)
+					return status;
+
+				pos += 2;
+			}
+		}
+		else
+		{
+			bal.xfers.tx_buf = bal.buffer;
+			bal.xfers.rx_buf = bal.buffer;
+			bal.xfers.len = count;
+
+			status = spi_sync_transfer(bal.spi, &(bal.xfers), 1);
+
+			if(status)
+				return status;
+
+		}
+
 		if(readFlag != 0)
 			if (copy_to_user(buf, bal.buffer, count))
 				return -EFAULT;
@@ -195,7 +223,16 @@ static long
 baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	int status = -EINVAL;
-	
+
+	switch (cmd) {
+		case BAL_IOC_RW_MULTI_REG:
+			bal.MultiRegRW = arg;
+			status = 0;
+			break;
+		default:
+			break;
+	}
+
 	return status;
 }
 
@@ -232,14 +269,14 @@ static int bal_spi_probe(struct spi_device *spi)
 	int value = -1;
 	uint32_t * pValue = &value;
 	int status = -1;
-	
+
 	dev_info(&spi->dev, "Probing BAL driver\n");
 	mutex_init(&bal.use_lock);
 
 	if (spi->dev.of_node) {
-		
+
 		status = of_property_read_u32_index(spi->dev.of_node, "NFC-reader-chip", 0, pValue);
-		
+
 		if(status == 0)
 			switch(*pValue)
 			{
@@ -254,11 +291,11 @@ static int bal_spi_probe(struct spi_device *spi)
 				case 2: /* PN5180 */
 				default :  /* If no other specified, PN5180 reader chip chosen as default by the BAL module. */
 					bal.busy_pin = of_get_named_gpio(spi->dev.of_node, "busy-pin-gpio", 0);
-					
+
 					if (!gpio_is_valid(bal.busy_pin)) {
 						dev_err(&spi->dev, "BUSY pin mapped to an invalid GPIO!\n");
 						return -ENODEV;
-					}					
+					}
 					gpio_direction_input(bal.busy_pin);
 
 					dev_info(&spi->dev, "PN5180 reader chip\n");
@@ -269,11 +306,11 @@ static int bal_spi_probe(struct spi_device *spi)
 			dev_err(&spi->dev, "Parsing reader chip information from Device Tree FAILED!\n PN5180 is set by default.\n");
 
 			bal.busy_pin = of_get_named_gpio(spi->dev.of_node, "busy-pin-gpio", 0);
-					
+
 			if (!gpio_is_valid(bal.busy_pin)) {
 				dev_err(&spi->dev, "BUSY pin mapped to an invalid GPIO!\n");
 				return -ENODEV;
-			}					
+			}
 			gpio_direction_input(bal.busy_pin);
 			bal.HalType = 2;
 		}
@@ -289,9 +326,10 @@ static int bal_spi_probe(struct spi_device *spi)
 		}
 		bal.busy_pin = platform_data->busy_pin;
 	}
-	
+
 	bal.spi = spi;
 	bal.devt = MKDEV(BALDEV_MAJOR, BALDEV_MINOR);
+	bal.MultiRegRW = 0;
 
 	dev = device_create(baldev_class, &spi->dev, bal.devt, &bal, "bal");
 	if (IS_ERR(dev)) {
