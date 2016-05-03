@@ -237,29 +237,48 @@ static int bal_spi_probe(struct spi_device *spi)
 	mutex_init(&bal.use_lock);
 
 	if (spi->dev.of_node) {
-		bal.busy_pin = of_get_named_gpio(spi->dev.of_node, "busy-pin-gpio", 0);
-
+		
 		status = of_property_read_u32_index(spi->dev.of_node, "NFC-reader-chip", 0, pValue);
 		
 		if(status == 0)
 			switch(*pValue)
 			{
-				case 0:
+				case 0: /* PN512 */
 					dev_info(&spi->dev, "PN512 reader chip\n");
 					bal.HalType = (unsigned long)*pValue;
 					break;
-				case 1:
+				case 1: /* RC663 */
 					dev_info(&spi->dev, "RC663 reader chip\n");
 					bal.HalType = (unsigned long)*pValue;
 					break;
-				case 2:
+				case 2: /* PN5180 */
 				default :  /* If no other specified, PN5180 reader chip chosen as default by the BAL module. */
+					bal.busy_pin = of_get_named_gpio(spi->dev.of_node, "busy-pin-gpio", 0);
+					
+					if (!gpio_is_valid(bal.busy_pin)) {
+						dev_err(&spi->dev, "BUSY pin mapped to an invalid GPIO!\n");
+						return -ENODEV;
+					}					
+					gpio_direction_input(bal.busy_pin);
+
 					dev_info(&spi->dev, "PN5180 reader chip\n");
 					bal.HalType = (unsigned long)*pValue;
 					break;
 			}
-			else
-				dev_err(&spi->dev, "Error while parsing reader chip information from Device Tree!\n");
+		else { /* NFC-reader-chip property not read from the Device Tree. PN5180 is set byt this function as default HAL type. */
+			dev_err(&spi->dev, "Parsing reader chip information from Device Tree FAILED!\n PN5180 is set by default.\n");
+
+			bal.busy_pin = of_get_named_gpio(spi->dev.of_node, "busy-pin-gpio", 0);
+					
+			if (!gpio_is_valid(bal.busy_pin)) {
+				dev_err(&spi->dev, "BUSY pin mapped to an invalid GPIO!\n");
+				return -ENODEV;
+			}					
+			gpio_direction_input(bal.busy_pin);
+			bal.HalType = 2;
+		}
+
+
 	}
 	else {
 		struct bal_spi_platform_data * platform_data = spi->dev.platform_data;
@@ -270,10 +289,7 @@ static int bal_spi_probe(struct spi_device *spi)
 		}
 		bal.busy_pin = platform_data->busy_pin;
 	}
-	if (!gpio_is_valid(bal.busy_pin)) {
-		dev_err(&spi->dev, "BUSY pin mapped to an invalid GPIO!\n");
-		return -ENODEV;
-	}
+	
 	bal.spi = spi;
 	bal.devt = MKDEV(BALDEV_MAJOR, BALDEV_MINOR);
 
@@ -283,7 +299,6 @@ static int bal_spi_probe(struct spi_device *spi)
 		return PTR_ERR(dev);
 	}
 
-	gpio_direction_input(bal.busy_pin);
 	spi_set_drvdata(spi, &bal);
 	return 0;
 }
