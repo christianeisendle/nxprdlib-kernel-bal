@@ -106,6 +106,17 @@ sudo echo "dtoverlay=bal" >> config.txt
 # optional step: In case BUSY pin should be mapped to a different GPIO than 25, which is default:
 sudo echo "dtparam=busy-pin-gpio=23" >> config.txt
 # In this case BUSY is now routed to GPIO 23
+
+# optional step: Default reader chip is PN512. In case other reader chip is used respect following lines.
+#Following numbering is assigned to particular reader chips.
+#0 for PN512
+#1 for RC663
+#2 for PN5180
+#To configure BAL module for RC663
+sudo echo "dtparam=NFC-reader-chip=1" >> config.txt
+#To configure BAL module for PN5180
+sudo echo "dtparam=NFC-reader-chip=2" >> config.txt
+
 ```
 
 To load the module during boot, it should be added to `/etc/modules`:
