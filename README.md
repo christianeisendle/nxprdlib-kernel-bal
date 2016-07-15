@@ -52,7 +52,29 @@ make modules_prepare
 make M=/usr/src/nxprdlib-kernel-bal/bal
 make M=/usr/src/nxprdlib-kernel-bal/bal modules_install
 ```
-### SPI Board Info
+
+### Board Connection
+The module requires an SPI device to be associated with it as well as a dedicated GPIO, configured as input which is connected to the BUSY pin of PN5180. This association happens either through device tree or SPI board info within platform/board specifc code, whichever is supported. 
+
+#### Device Tree
+When using device tree the `compatible` string has to be set to `"nxp,bal"`. 
+An example device tree overlay can be found here: https://github.com/christianeisendle/linux/blob/rpi-4.4.y_bal/arch/arm/boot/dts/overlays/bal-overlay.dts
+
+On Raspberry Pi's device tree it can be added like this:
+
+```
+cd /boot
+sudo wget https://raw.githubusercontent.com/christianeisendle/linux/rpi-4.4.y_bal/arch/arm/boot/dts/overlays/bal-overlay.dts
+# Note: dtc is part of the device-tree-compiler package: sudo apt-get install device-tree-compiler
+sudo dtc -I dts -O dtb -o bal.dtbo -@ bal-overlay.dts
+sudo mv bal.dtbo overlays/
+sudo echo "dtoverlay=bal" >> config.txt
+# optional step: In case BUSY pin should be mapped to a different GPIO than 25, which is default:
+sudo echo "dtparam=busy-pin-gpio=23" >> config.txt
+# In this case BUSY is now routed to GPIO 23
+```
+
+#### SPI Board Info
 In case device tree is not used the BAL module needs to be assigned to a spi_device within the spi_board_info struct of the platform specific code. In case of Raspberry Pi 2 the code is located within the kernel tree at `arch/arm/mach-bcm2709/bcm2709.c`
 
 The existing bcm2708_spi_devices array needs to be adapted/modified in order to assign one SPI device with the BAL module instead of the spidev module. Example:
@@ -91,27 +113,15 @@ static struct spi_board_info bcm2708_spi_devices[] = {
 After applying these changes the Kernel needs to be recompiled.
 
 ## Load the Module
-The module requires an SPI device to be associated with it as well as a dedicated GPIO, configured as input which is connected to the BUSY pin of PN5180. The SPI device and the GPIO needs to be connected with the module using device tree (`compatible` string has to be set to `"nxp,bal"`) or using SPI board info (see above).
-An example device tree overlay can be found here: https://github.com/christianeisendle/linux/blob/rpi_4.1.19_bal/arch/arm/boot/dts/overlays/bal-overlay.dts
-
-On Raspberry Pi's device tree it can be added like this:
-
+Module can be loaded using modprobe:
 ```
-cd /boot
-sudo wget https://raw.githubusercontent.com/christianeisendle/linux/rpi_4.1.19_bal/arch/arm/boot/dts/overlays/bal-overlay.dts
-# Note: dtc is part of the device-tree-compiler package: sudo apt-get install device-tree-compiler
-sudo dtc -I dts -O dtb -o bal-overlay.dtb -@ bal-overlay.dts
-sudo mv bal-overlay.dtb overlays/
-sudo echo "dtoverlay=bal" >> config.txt
-# optional step: In case BUSY pin should be mapped to a different GPIO than 25, which is default:
-sudo echo "dtparam=busy-pin-gpio=23" >> config.txt
-# In this case BUSY is now routed to GPIO 23
+sudo modprobe bal
 ```
 
-To load the module during boot, it should be added to `/etc/modules`:
+Load during boot is Linux distribution specific - on Raspberry pi it can be done by adding the module to `/etc/modules` :
 
 ```
-echo "bal" >> /etc/modules
+sudo echo "bal" >> /etc/modules
 ```
 
 ### Change ownership of `/dev/bal`
