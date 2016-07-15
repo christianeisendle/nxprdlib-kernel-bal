@@ -68,6 +68,13 @@ sudo wget https://raw.githubusercontent.com/christianeisendle/linux/rpi-4.4.y_ba
 # Note: dtc is part of the device-tree-compiler package: sudo apt-get install device-tree-compiler
 sudo dtc -I dts -O dtb -o bal.dtbo -@ bal-overlay.dts
 sudo mv bal.dtbo overlays/
+
+# Note: 
+#   On older Kernels (e.g. 4.1.x) the naming conventions for overlays is different (xxx-overlay.dtb)
+#   In this case the commands have to be called like this:
+#   sudo dtc -I dts -O dtb -o bal-overlay.dtb -@ bal-overlay.dts
+#   sudo mv bal-overlay.dtb overlays/
+
 sudo echo "dtoverlay=bal" >> config.txt
 # optional step: In case BUSY pin should be mapped to a different GPIO than 25, which is default:
 sudo echo "dtparam=busy-pin-gpio=23" >> config.txt
