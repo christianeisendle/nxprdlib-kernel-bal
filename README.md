@@ -81,6 +81,18 @@ sudo echo "dtparam=busy-pin-gpio=23" >> config.txt
 # In this case BUSY is now routed to GPIO 23
 ```
 
+# optional step: Default reader chip is PN512. In case other reader chip is used respect following lines.
+#Following numbering is assigned to particular reader chips.
+#0 for PN512
+#1 for RC663
+#2 for PN5180
+#To configure BAL module for RC663
+sudo echo "dtparam=NFC-reader-chip=1" >> config.txt
+#To configure BAL module for PN5180
+sudo echo "dtparam=NFC-reader-chip=2" >> config.txt
+```
+
+
 #### SPI Board Info
 In case device tree is not used the BAL module needs to be assigned to a spi_device within the spi_board_info struct of the platform specific code. In case of Raspberry Pi 2 the code is located within the kernel tree at `arch/arm/mach-bcm2709/bcm2709.c`
 
