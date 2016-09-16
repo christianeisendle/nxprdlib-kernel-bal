@@ -33,9 +33,17 @@
 #define BALDEV_MAJOR			100
 #define BALDEV_MINOR			0
 
+#define BAL_IOCTL_MODE			(0x0U)
+
 #define BAL_MAX_BUF_SIZE		1024
 #define BAL_BUSY_TIMEOUT_SECS		1
+#define BAL_BUSY_DWL_TIMEOUT_SECS	5
 
+#define BAL_MODE_NORMAL			(0x0U)
+#define BAL_MODE_DWL			(0x1U)
+
+#define BAL_DWL_DIRECTION_BYTE_WR       (0x7fU)
+#define BAL_DWL_DIRECTION_BYTE_RD       (0xffU)
 
 struct bal_data {
 	dev_t			devt;
@@ -47,6 +55,7 @@ struct bal_data {
 	bool			in_use;
 	unsigned int		busy_pin;
 	u8	*		buffer;
+	u8			mode;
 };
 
 
@@ -54,17 +63,36 @@ static struct bal_data bal;
 static struct class *baldev_class;
 
 static ssize_t
-wait_for_busy_idle(void)
+wait_for_busy(void)
 {
 	unsigned long tmo;
-	tmo = jiffies + (BAL_BUSY_TIMEOUT_SECS * HZ);
-	while (gpio_get_value(bal.busy_pin) == 1) {
+	u8 high_low;
+	if (BAL_MODE_DWL == bal.mode) {
+		tmo = jiffies + (BAL_BUSY_DWL_TIMEOUT_SECS * HZ);
+		high_low = 0;
+	} else {
+		tmo = jiffies + (BAL_BUSY_TIMEOUT_SECS * HZ);
+		high_low = 1;
+	}
+	while (gpio_get_value(bal.busy_pin) == high_low) {
 		if (time_after(jiffies, tmo)) {
-			dev_err(&bal.spi->dev, "Timeout occured waiting for BUSY going low\n");
+			dev_err(&bal.spi->dev, "Timeout occured waiting for BUSY\n");
 			return -EBUSY;
 		}
 	}
 	return 0;
+}
+
+static int
+baldev_read_dwl(char * buffer, size_t count)
+{
+	struct spi_transfer t = {
+		.rx_buf		= buffer,
+		.tx_buf		= buffer,
+		.len		= count,
+	};
+
+	return spi_sync_transfer(bal.spi, &t, 1);
 }
 
 static ssize_t
@@ -75,16 +103,20 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 	if (count > BAL_MAX_BUF_SIZE)
 		return -EMSGSIZE;
 
-	status = wait_for_busy_idle();
+	status = wait_for_busy();
 	if (0 == status) {
-		status = spi_read(bal.spi, bal.buffer, count);
+		if (BAL_MODE_NORMAL == bal.mode)
+			status = spi_read(bal.spi, bal.buffer, count);
+		else {
+			bal.buffer[0] = BAL_DWL_DIRECTION_BYTE_RD;
+			status = baldev_read_dwl(bal.buffer, count);
+		}
 	}
 	if (status < 0)
 		return status;
 
-	if (copy_to_user(buf, bal.buffer, count)) {
+	if (copy_to_user(buf, bal.buffer, count))
 		return -EFAULT;
-	}
 	return count;
 }
 
@@ -94,18 +126,17 @@ baldev_write(struct file *filp, const char __user *buf,
 		size_t count, loff_t *f_pos)
 {
 	ssize_t status = 0;
-	if (count > BAL_MAX_BUF_SIZE) {
-		return -ENOMEM;
-	}
-	status = copy_from_user(bal.buffer, buf, count);
-	if (status) {
-		return status;
-	}
 
-	status = wait_for_busy_idle();
-	if (0 == status) {
+	if (count > BAL_MAX_BUF_SIZE)
+		return -ENOMEM;
+	status = copy_from_user(bal.buffer, buf, count);
+	if (status)
+		return status;
+
+	if (BAL_MODE_NORMAL == bal.mode)
+		status = wait_for_busy();
+	if (0 == status)
 		status = spi_write(bal.spi, bal.buffer, count);
-	}
 	if (status < 0)
 		return status;
 
@@ -127,6 +158,7 @@ static int baldev_open(struct inode *inode, struct file *filp)
 		mutex_unlock(&bal.use_lock);
 		return -ENOMEM;
 	}
+	bal.mode = BAL_MODE_NORMAL;
 	bal.in_use = true;
 	mutex_unlock(&bal.use_lock);
 
@@ -148,7 +180,12 @@ static int baldev_release(struct inode *inode, struct file *filp)
 static long
 baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-	int status = -EINVAL;
+	int status = 0;
+
+	if (BAL_IOCTL_MODE == cmd)
+		bal.mode = (u8)arg;
+	else
+		status = -EINVAL;
 
 	return status;
 }
