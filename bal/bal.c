@@ -54,7 +54,7 @@ struct bal_data {
 	struct mutex		use_lock;
 	bool			in_use;
 	unsigned int		busy_pin;
-	u8	*		buffer;
+	u8			*buffer;
 	u8			mode;
 };
 
@@ -67,7 +67,8 @@ wait_for_busy(void)
 {
 	unsigned long tmo;
 	u8 high_low;
-	if (BAL_MODE_DWL == bal.mode) {
+
+	if (bal.mode == BAL_MODE_DWL) {
 		tmo = jiffies + (BAL_BUSY_DWL_TIMEOUT_SECS * HZ);
 		high_low = 0;
 	} else {
@@ -84,7 +85,7 @@ wait_for_busy(void)
 }
 
 static int
-baldev_read_dwl(char * buffer, size_t count)
+baldev_read_dwl(char *buffer, size_t count)
 {
 	struct spi_transfer t = {
 		.rx_buf		= buffer,
@@ -104,8 +105,8 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 		return -EMSGSIZE;
 
 	status = wait_for_busy();
-	if (0 == status) {
-		if (BAL_MODE_NORMAL == bal.mode)
+	if (status == 0) {
+		if (bal.mode == BAL_MODE_NORMAL)
 			status = spi_read(bal.spi, bal.buffer, count);
 		else {
 			bal.buffer[0] = BAL_DWL_DIRECTION_BYTE_RD;
@@ -133,9 +134,9 @@ baldev_write(struct file *filp, const char __user *buf,
 	if (status)
 		return status;
 
-	if (BAL_MODE_NORMAL == bal.mode)
+	if (bal.mode == BAL_MODE_NORMAL)
 		status = wait_for_busy();
-	if (0 == status)
+	if (status == 0)
 		status = spi_write(bal.spi, bal.buffer, count);
 	if (status < 0)
 		return status;
@@ -154,7 +155,6 @@ static int baldev_open(struct inode *inode, struct file *filp)
 	}
 	bal.buffer = kmalloc(BAL_MAX_BUF_SIZE, GFP_KERNEL | GFP_DMA);
 	if (bal.buffer == NULL) {
-		dev_err(&bal.spi->dev, "Unable to alloc memory!\n");
 		mutex_unlock(&bal.use_lock);
 		return -ENOMEM;
 	}
@@ -171,6 +171,7 @@ static int baldev_open(struct inode *inode, struct file *filp)
 static int baldev_release(struct inode *inode, struct file *filp)
 {
 	int status = 0;
+
 	module_put(THIS_MODULE);
 	kfree(bal.buffer);
 	bal.in_use = false;
@@ -182,7 +183,7 @@ baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	int status = 0;
 
-	if (BAL_IOCTL_MODE == cmd)
+	if (cmd == BAL_IOCTL_MODE)
 		bal.mode = (u8)arg;
 	else
 		status = -EINVAL;
@@ -203,8 +204,8 @@ static const struct file_operations baldev_fops = {
 
 #ifdef CONFIG_OF
 static const struct of_device_id baldev_dt_ids[] = {
-        { .compatible = "nxp,bal" },
-        {},
+		{ .compatible = "nxp,bal" },
+		{},
 };
 MODULE_DEVICE_TABLE(of, baldev_dt_ids);
 #endif
@@ -220,13 +221,15 @@ static int bal_spi_remove(struct spi_device *spi)
 static int bal_spi_probe(struct spi_device *spi)
 {
 	struct device *dev;
+
 	dev_info(&spi->dev, "Probing BAL driver\n");
 	mutex_init(&bal.use_lock);
 	if (spi->dev.of_node) {
-		bal.busy_pin = of_get_named_gpio(spi->dev.of_node, "busy-pin-gpio", 0);
-	}
-	else {
-		struct bal_spi_platform_data * platform_data = spi->dev.platform_data;
+		bal.busy_pin =
+			of_get_named_gpio(spi->dev.of_node, "busy-pin-gpio", 0);
+	} else {
+		struct bal_spi_platform_data *platform_data =
+				spi->dev.platform_data;
 
 		if (!platform_data) {
 			dev_err(&spi->dev, "Platform data for BAL not specified!\n");
@@ -266,20 +269,16 @@ static struct spi_driver bal_spi_driver = {
 static int __init baldev_init(void)
 {
 	int status;
+
 	baldev_class = class_create(THIS_MODULE, "bal");
-	if (IS_ERR(baldev_class)) {
+	if (IS_ERR(baldev_class))
 		return PTR_ERR(baldev_class);
-	}
 	status = register_chrdev(BALDEV_MAJOR, "bal", &baldev_fops);
-	if (status < 0) {
-		printk(KERN_ERR "Error registering character device for bal driver!\n");
+	if (status < 0)
 		goto err_reg_dev;
-	}
 	status = spi_register_driver(&bal_spi_driver);
-	if (status < 0) {
-		printk(KERN_ERR "Error registering BAL driver structure at SPI core!\n");
+	if (status < 0)
 		goto err_reg_drv;
-	}
 	return 0;
 
 err_reg_drv:
