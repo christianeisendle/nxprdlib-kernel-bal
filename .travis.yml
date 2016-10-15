@@ -11,12 +11,11 @@ script:
   - popd
   - mkdir linux
   - pushd linux
-  - git clone --depth=1 https://github.com/raspberrypi/linux.git
+  - git clone --recursive --depth=1 https://github.com/christianeisendle/linux.git
+  - pushd bal
+  - git pull
+  - git checkout $TRAVIS_COMMIT
+  - popd
   - export ARCH=arm
   - export CROSS_COMPILE=arm-linux-gnueabihf-
-  - cd linux
-  - export KERNEL=kernel7
-  - export NUM_CPU_CORES=`/usr/bin/nproc`
-  - make -j$NUM_CPU_CORES bcm2709_defconfig
-  - make -j$NUM_CPU_CORES zImage modules
-  - make -j$NUM_CPU_CORES M=$PWD/../../bal
+  - ./build_bal.sh raspi2
