@@ -13,7 +13,6 @@ script:
   - cd linux
   - git clone --recursive --depth=1 https://github.com/christianeisendle/linux.git
   - cd linux/bal
-  - git pull
   - git checkout $TRAVIS_COMMIT
   - cd ..
   - export ARCH=arm
