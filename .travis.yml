@@ -11,7 +11,7 @@ script:
   - popd
   - mkdir linux
   - pushd linux
-  - git clone --depth=1 https://github.com/christianeisendle/linux.git
+  - git clone --depth=1 https://github.com/raspberrypi/linux.git
   - export ARCH=arm
   - export CROSS_COMPILE=arm-linux-gnueabihf-
   - cd linux
