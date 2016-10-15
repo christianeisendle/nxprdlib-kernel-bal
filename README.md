@@ -1,5 +1,7 @@
 # NXP NFCRdLib Kernel BAL Module
 
+[![Build Status](https://travis-ci.org/christianeisendle/nxprdlib-kernel-bal.svg?branch=master)](https://travis-ci.org/christianeisendle/nxprdlib-kernel-bal)
+
 ## General
 This is a linux kernel module for the NXP NFCRdLib BAL (Bus Abstraction Layer). 
 It allows having the BAL within the Kernel while the NFCRdLib runs in user space. This may be required in order to reduce the latency introduced by unnecessary context switches when BAL also runs in user space.
