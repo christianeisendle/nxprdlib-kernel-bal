@@ -10,12 +10,12 @@ script:
   - export PATH=`pwd`/tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin/:$PATH
   - popd
   - mkdir linux
-  - pushd linux
+  - cd linux
   - git clone --recursive --depth=1 https://github.com/christianeisendle/linux.git
-  - pushd bal
+  - cd linux/bal
   - git pull
   - git checkout $TRAVIS_COMMIT
-  - popd
+  - cd ..
   - export ARCH=arm
   - export CROSS_COMPILE=arm-linux-gnueabihf-
   - ./build_bal.sh raspi2
