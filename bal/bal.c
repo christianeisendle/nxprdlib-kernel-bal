@@ -28,6 +28,7 @@
 #include <linux/spi/spidev.h>
 #include <linux/spi/bal_spi.h>
 #include <linux/uaccess.h>
+#include <linux/interrupt.h>
 
 #define BALDEV_NAME "bal"
 #define BALDEV_MAJOR			100
@@ -36,8 +37,7 @@
 #define BAL_IOCTL_MODE			(0x0U)
 
 #define BAL_MAX_BUF_SIZE		1024
-#define BAL_BUSY_TIMEOUT_SECS		1
-#define BAL_BUSY_DWL_TIMEOUT_SECS	5
+#define BAL_BUSY_TIMEOUT_SECS		3
 
 #define BAL_MODE_NORMAL			(0x0U)
 #define BAL_MODE_DWL			(0x1U)
@@ -54,6 +54,9 @@ struct bal_data {
 	struct mutex		use_lock;
 	bool			in_use;
 	unsigned int		busy_pin;
+	int			busy_irq;
+	struct completion	busy_done;
+	bool			first_xfer;
 	u8			*buffer;
 	u8			mode;
 };
@@ -62,34 +65,19 @@ struct bal_data {
 static struct bal_data bal;
 static struct class *baldev_class;
 
-static ssize_t
-wait_for_busy(void)
+static irqreturn_t
+bal_busy_isr(int irq, void *dev_id)
 {
-	unsigned long tmo;
-	u8 high_low;
-
-	if (bal.mode == BAL_MODE_DWL) {
-		tmo = jiffies + (BAL_BUSY_DWL_TIMEOUT_SECS * HZ);
-		high_low = 0;
-	} else {
-		tmo = jiffies + (BAL_BUSY_TIMEOUT_SECS * HZ);
-		high_low = 1;
-	}
-	while (gpio_get_value(bal.busy_pin) == high_low) {
-		if (time_after(jiffies, tmo)) {
-			dev_err(&bal.spi->dev, "Timeout occured waiting for BUSY\n");
-			return -EBUSY;
-		}
-	}
-	return 0;
+	complete(&bal.busy_done);
+	return IRQ_HANDLED;
 }
 
 static int
-baldev_read_dwl(char *buffer, size_t count)
+bal_spi_sync_xfer(size_t count)
 {
 	struct spi_transfer t = {
-		.rx_buf		= buffer,
-		.tx_buf		= buffer,
+		.rx_buf		= bal.buffer,
+		.tx_buf		= bal.buffer,
 		.len		= count,
 	};
 
@@ -104,15 +92,15 @@ baldev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 	if (count > BAL_MAX_BUF_SIZE)
 		return -EMSGSIZE;
 
-	status = wait_for_busy();
-	if (status == 0) {
-		if (bal.mode == BAL_MODE_NORMAL)
-			status = spi_read(bal.spi, bal.buffer, count);
-		else {
-			bal.buffer[0] = BAL_DWL_DIRECTION_BYTE_RD;
-			status = baldev_read_dwl(bal.buffer, count);
-		}
+	status = wait_for_completion_timeout(
+		&bal.busy_done, (BAL_BUSY_TIMEOUT_SECS * HZ));
+	if (status < 0) {
+		dev_err(&bal.spi->dev, "Timeout waiting for BUSY\n");
+		return status;
 	}
+	if (bal.mode == BAL_MODE_DWL)
+		bal.buffer[0] = BAL_DWL_DIRECTION_BYTE_RD;
+	status = bal_spi_sync_xfer(count);
 	if (status < 0)
 		return status;
 
@@ -130,14 +118,19 @@ baldev_write(struct file *filp, const char __user *buf,
 
 	if (count > BAL_MAX_BUF_SIZE)
 		return -ENOMEM;
-	status = copy_from_user(bal.buffer, buf, count);
-	if (status)
-		return status;
-
-	if (bal.mode == BAL_MODE_NORMAL)
-		status = wait_for_busy();
-	if (status == 0)
-		status = spi_write(bal.spi, bal.buffer, count);
+	if (copy_from_user(bal.buffer, buf, count))
+		return -EFAULT;
+	if ((bal.mode == BAL_MODE_NORMAL) &&
+		!bal.first_xfer) {
+		status = wait_for_completion_timeout(
+			&bal.busy_done, (BAL_BUSY_TIMEOUT_SECS * HZ));
+		if (status < 0) {
+			dev_err(&bal.spi->dev, "Timeout waiting for BUSY\n");
+			return status;
+		}
+	}
+	bal.first_xfer = false;
+	status = bal_spi_sync_xfer(count);
 	if (status < 0)
 		return status;
 
@@ -147,31 +140,47 @@ baldev_write(struct file *filp, const char __user *buf,
 
 static int baldev_open(struct inode *inode, struct file *filp)
 {
+	int status;
+
 	mutex_lock(&bal.use_lock);
 	if (bal.in_use) {
 		dev_err(&bal.spi->dev, "Can only be opened once!\n");
-		mutex_unlock(&bal.use_lock);
-		return -EBUSY;
+		status = -EBUSY;
+		goto err;
 	}
 	bal.buffer = kmalloc(BAL_MAX_BUF_SIZE, GFP_KERNEL | GFP_DMA);
 	if (bal.buffer == NULL) {
-		mutex_unlock(&bal.use_lock);
-		return -ENOMEM;
+		status = -ENOMEM;
+		goto err;
 	}
 	bal.mode = BAL_MODE_NORMAL;
+	status = request_threaded_irq(bal.busy_irq, bal_busy_isr,
+							NULL,
+							IRQF_TRIGGER_FALLING,
+							"bal", &bal);
+	if (status < 0) {
+		dev_err(&bal.spi->dev, "Can't request IRQ %d!\n", bal.busy_irq);
+		goto err;
+	}
 	bal.in_use = true;
+	reinit_completion(&bal.busy_done);
+	bal.first_xfer = true;
 	mutex_unlock(&bal.use_lock);
 
 	nonseekable_open(inode, filp);
 	try_module_get(THIS_MODULE);
 
 	return 0;
+err:
+	mutex_unlock(&bal.use_lock);
+	return status;
 }
 
 static int baldev_release(struct inode *inode, struct file *filp)
 {
 	int status = 0;
 
+	free_irq(bal.busy_irq, &bal);
 	module_put(THIS_MODULE);
 	kfree(bal.buffer);
 	bal.in_use = false;
@@ -182,10 +191,21 @@ static long
 baldev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	int status = 0;
+	int flag;
 
-	if (cmd == BAL_IOCTL_MODE)
+	if (cmd == BAL_IOCTL_MODE) {
 		bal.mode = (u8)arg;
-	else
+		if (bal.mode == BAL_MODE_NORMAL)
+			flag = IRQF_TRIGGER_FALLING;
+		else
+			flag = IRQF_TRIGGER_RISING;
+		free_irq(bal.busy_irq, &bal);
+		status = request_threaded_irq(bal.busy_irq, bal_busy_isr,
+					NULL, flag, "bal", &bal);
+		if (status < 0)
+			dev_err(&bal.spi->dev,
+				"Can't request IRQ %d!\n", bal.busy_irq);
+	} else
 		status = -EINVAL;
 
 	return status;
@@ -214,6 +234,7 @@ MODULE_DEVICE_TABLE(of, baldev_dt_ids);
 static int bal_spi_remove(struct spi_device *spi)
 {
 	dev_info(&spi->dev, "Removing SPI driver\n");
+	free_irq(bal.busy_irq, &bal);
 	device_destroy(baldev_class, bal.devt);
 	return 0;
 }
@@ -241,8 +262,14 @@ static int bal_spi_probe(struct spi_device *spi)
 		dev_err(&spi->dev, "BUSY pin mapped to an invalid GPIO!\n");
 		return -ENODEV;
 	}
+	bal.busy_irq = gpio_to_irq(bal.busy_pin);
+	if (bal.busy_irq < 0) {
+		dev_err(&spi->dev, "BUSY pin GPIO can't be used as IRQ!\n");
+		return bal.busy_irq;
+	}
 	bal.spi = spi;
 	bal.devt = MKDEV(BALDEV_MAJOR, BALDEV_MINOR);
+	init_completion(&bal.busy_done);
 
 	dev = device_create(baldev_class, &spi->dev, bal.devt, &bal, "bal");
 	if (IS_ERR(dev)) {
