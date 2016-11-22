@@ -234,7 +234,6 @@ MODULE_DEVICE_TABLE(of, baldev_dt_ids);
 static int bal_spi_remove(struct spi_device *spi)
 {
 	dev_info(&spi->dev, "Removing SPI driver\n");
-	free_irq(bal.busy_irq, &bal);
 	device_destroy(baldev_class, bal.devt);
 	return 0;
 }
