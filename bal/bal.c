@@ -178,13 +178,11 @@ err:
 
 static int baldev_release(struct inode *inode, struct file *filp)
 {
-	int status = 0;
-
 	free_irq(bal.busy_irq, &bal);
 	module_put(THIS_MODULE);
 	kfree(bal.buffer);
 	bal.in_use = false;
-	return status;
+	return 0;
 }
 
 static long
